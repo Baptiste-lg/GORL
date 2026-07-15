@@ -29,19 +29,64 @@ func (t Tile) Glyph() string {
 	}
 }
 
+// Theme controls dungeon color palette.
+type Theme int
+
+const (
+	ThemeStone   Theme = iota // floors 1-4
+	ThemeCrypt                // floors 5-9
+	ThemeInferno              // floors 10-14
+	ThemeAbyss                // floors 15+
+)
+
+// ThemeForFloor returns the appropriate theme.
+func ThemeForFloor(floor int) Theme {
+	switch {
+	case floor >= 15:
+		return ThemeAbyss
+	case floor >= 10:
+		return ThemeInferno
+	case floor >= 5:
+		return ThemeCrypt
+	default:
+		return ThemeStone
+	}
+}
+
+// themeColors maps [theme][tile] to a color string.
+var themeColors = [4][5]string{
+	// Stone: wall, floor, door, stairs, void
+	{"#666666", "#333333", "#8B4513", "#FFD700", "#000000"},
+	// Crypt
+	{"#446644", "#223322", "#556B2F", "#FFD700", "#000000"},
+	// Inferno
+	{"#884422", "#331111", "#AA4400", "#FFD700", "#000000"},
+	// Abyss
+	{"#443366", "#1a0a2e", "#6633AA", "#FFD700", "#000000"},
+}
+
 // Color returns the display color for this tile.
 func (t Tile) Color() string {
+	return t.ThemedColor(ThemeStone)
+}
+
+// ThemedColor returns the display color for this tile in a given theme.
+func (t Tile) ThemedColor(theme Theme) string {
+	idx := int(theme)
+	if idx < 0 || idx > 3 {
+		idx = 0
+	}
 	switch t {
 	case TileWall:
-		return "#666666"
+		return themeColors[idx][0]
 	case TileFloor:
-		return "#333333"
+		return themeColors[idx][1]
 	case TileDoor:
-		return "#8B4513"
+		return themeColors[idx][2]
 	case TileStairsDown, TileStairsUp:
-		return "#FFD700"
+		return themeColors[idx][3]
 	default:
-		return "#000000"
+		return themeColors[idx][4]
 	}
 }
 
