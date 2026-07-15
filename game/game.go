@@ -43,7 +43,8 @@ type Game struct {
 	floor         int
 	rng           *rand.Rand
 	killCount     int
-	streak        *KillStreak
+	streak  *KillStreak
+	unlocks *UnlockManager
 
 	// Audio
 	audioEngine *audio.Engine
@@ -53,6 +54,9 @@ type Game struct {
 	// Level-up state
 	levelChoices    []StatBoost
 	levelUpSelected int
+
+	// Loadout selection
+	selectedLoadout int
 }
 
 func New() *Game {
@@ -68,6 +72,7 @@ func New() *Game {
 		music:       audio.NewMusicEngine(ae),
 		sfx:         audio.NewSFX(ae),
 		streak:      NewKillStreak(),
+		unlocks:     NewUnlockManager(),
 	}
 	g.registerInput()
 	return g
@@ -82,6 +87,20 @@ func (g *Game) startNewGame() {
 	g.groundItems = nil
 	g.streak = NewKillStreak()
 	g.generateFloor()
+
+	// Apply selected loadout
+	loadouts := g.unlocks.UnlockedLoadouts()
+	if g.selectedLoadout >= 0 && g.selectedLoadout < len(loadouts) {
+		lo := loadouts[g.selectedLoadout]
+		g.player.Stats = lo.Stats
+		g.player.Stats.HP = g.player.Stats.MaxHP()
+		if lo.Weapon != nil {
+			// Copy the weapon so we don't share pointers across runs
+			w := *lo.Weapon
+			g.player.Inventory.Weapon = &w
+		}
+	}
+
 	g.state = StatePlaying
 }
 
@@ -106,6 +125,13 @@ func (g *Game) generateFloor() {
 
 func (g *Game) nextFloor() {
 	g.floor++
+
+	// Check for new unlocks
+	newUnlocks := g.unlocks.CheckUnlocks(g.floor)
+	for _, name := range newUnlocks {
+		g.particles.SpawnText(g.player.X, g.player.Y, "Unlocked: "+name+"!", "#FFD700")
+	}
+
 	g.generateFloor()
 }
 
@@ -130,8 +156,18 @@ func (g *Game) registerInput() {
 func (g *Game) handleKeyDown(key string) {
 	switch g.state {
 	case StateMenu:
-		if key == "Enter" {
+		loadouts := g.unlocks.UnlockedLoadouts()
+		switch key {
+		case "Enter":
 			g.startNewGame()
+		case "ArrowLeft":
+			if g.selectedLoadout > 0 {
+				g.selectedLoadout--
+			}
+		case "ArrowRight":
+			if g.selectedLoadout < len(loadouts)-1 {
+				g.selectedLoadout++
+			}
 		}
 	case StateDead:
 		if key == "Enter" {
@@ -145,6 +181,8 @@ func (g *Game) handleKeyDown(key string) {
 			g.state = StatePaused
 		case "m", "M":
 			g.audioEngine.ToggleMute()
+		case "e", "E", "Enter":
+			g.interactShrine()
 		}
 	case StateInventory:
 		g.handleInventoryKey(key)
@@ -236,6 +274,22 @@ func (g *Game) checkLevelUp() {
 		}
 		g.levelUpSelected = 0
 		g.state = StateLevelUp
+	}
+}
+
+func (g *Game) interactShrine() {
+	shrine := g.world.ShrineAt(g.player.X, g.player.Y)
+	if shrine == nil || shrine.Used {
+		return
+	}
+	result := UseShrine(shrine, g.player, g.rng)
+	g.particles.SpawnText(g.player.X, g.player.Y, result.Message, result.Color)
+	g.sfx.Pickup()
+
+	if !g.player.IsAlive {
+		g.sfx.Death()
+		g.renderer.Shake(10.0, 0.5)
+		g.state = StateDead
 	}
 }
 
@@ -591,6 +645,11 @@ func (g *Game) Render() {
 		}
 		g.renderer.DrawHUD(hudData)
 
+		// Shrine hint
+		if shrine := g.world.ShrineAt(g.player.X, g.player.Y); shrine != nil && !shrine.Used {
+			g.renderer.DrawText(1, render.GridRows-3, "[E] "+shrine.Name(), shrine.Color())
+		}
+
 		// Mini-map
 		g.renderer.DrawMiniMap(render.MiniMapData{
 			MapW:    dungeon.MapWidth,
@@ -633,8 +692,21 @@ func (g *Game) renderMenu() {
 	g.renderer.DrawText(25, 12, "#    # #    # #   #  #     ", "#00cc00")
 	g.renderer.DrawText(25, 13, " ####   ####  #    # ######", "#009900")
 	g.renderer.DrawText(28, 16, "Go Roguelike", "#888888")
+
+	// Loadout selection
+	loadouts := g.unlocks.UnlockedLoadouts()
+	if len(loadouts) > 1 {
+		g.renderer.DrawText(24, 19, "< Loadout: ", "#555555")
+		if g.selectedLoadout >= 0 && g.selectedLoadout < len(loadouts) {
+			lo := loadouts[g.selectedLoadout]
+			g.renderer.DrawText(35, 19, lo.Name, "#FFD700")
+			g.renderer.DrawText(24, 20, "  "+lo.Desc, "#888888")
+		}
+		g.renderer.DrawText(55, 19, " >", "#555555")
+	}
+
 	g.renderer.DrawText(24, 22, "Press ENTER to start", "#aaaaaa")
-	g.renderer.DrawText(24, 25, "WASD/Arrows: Move", "#555555")
+	g.renderer.DrawText(24, 25, "WASD/Arrows: Move  E: Interact", "#555555")
 	g.renderer.DrawText(24, 26, "I: Inventory  ESC: Pause", "#555555")
 	g.renderer.DrawText(24, 27, "M: Toggle Music", "#555555")
 }
@@ -652,6 +724,19 @@ func (g *Game) renderGameWorld() {
 				col := vx*render.TileCells + 1
 				row := vy*render.TileCells + 1
 				g.renderer.DrawChar(col, row, trap.Glyph(), trap.Color())
+			}
+		}
+	}
+
+	// Shrines
+	for _, shrine := range g.world.Shrines {
+		if g.fov.IsVisible(shrine.X, shrine.Y) {
+			vx := shrine.X - g.renderer.CamX
+			vy := shrine.Y - g.renderer.CamY
+			if vx >= 0 && vx < render.ViewTilesX && vy >= 0 && vy < render.ViewTilesY {
+				col := vx*render.TileCells + 1
+				row := vy*render.TileCells + 1
+				g.renderer.DrawChar(col, row, shrine.Glyph(), shrine.Color())
 			}
 		}
 	}
