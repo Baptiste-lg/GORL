@@ -2,7 +2,7 @@
 # Stage 1: Builder
 # Compiles the Go source into a WASM binary.
 # ============================================================
-FROM golang:1.22 AS builder
+FROM golang:1.23 AS builder
 
 WORKDIR /usr/src/app
 
@@ -18,7 +18,8 @@ COPY . .
 RUN GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o web/main.wasm .
 
 # Copy the Go WASM support JS from the SDK
-RUN cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" web/
+RUN cp "$(go env GOROOT)/misc/wasm/wasm_exec.js" web/ 2>/dev/null \
+    || cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" web/
 
 # ============================================================
 # Stage 2: Runtime
