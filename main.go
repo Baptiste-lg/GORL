@@ -1,7 +1,11 @@
 package main
 
+import "github.com/Baptiste-lg/GORL/game"
+
 func main() {
-	// WASM entry point — will be implemented in a later commit.
+	g := game.New()
+	g.Run()
+
 	// Block forever to keep the Go runtime alive in the browser.
 	select {}
 }
