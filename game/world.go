@@ -24,6 +24,21 @@ func NewWorld(dg *dungeon.GenerateResult, floor int, rng *rand.Rand) *World {
 }
 
 func (w *World) spawnEnemies(rng *rand.Rand) {
+	// Spawn boss in the stairs room on boss floors
+	bossType := BossForFloor(w.Floor)
+	if bossType >= 0 {
+		def := EnemyDefs[bossType]
+		// Place boss near the stairs
+		bx := w.Dungeon.StairsX + 1
+		by := w.Dungeon.StairsY
+		if !w.Dungeon.Map.At(bx, by).Passable() {
+			bx = w.Dungeon.StairsX - 1
+		}
+		boss := NewEnemy(def, bx, by, w.Floor)
+		boss.AI = AIChase // bosses are always aggressive
+		w.Enemies = append(w.Enemies, boss)
+	}
+
 	for i, room := range w.Dungeon.Rooms {
 		// Skip the player's spawn room
 		if i == 0 {
