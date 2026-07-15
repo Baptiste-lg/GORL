@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GORL - Go Roguelike</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas" width="1280" height="800"></canvas>
+        <div id="loading">Loading GORL...</div>
+    </div>
+    <script src="wasm_exec.js"></script>
+    <script>
+        const go = new Go();
+        WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
+            .then(result => {
+                document.getElementById("loading").style.display = "none";
+                go.run(result.instance);
+            })
+            .catch(err => {
+                document.getElementById("loading").textContent = "Failed to load: " + err;
+                console.error(err);
+            });
+    </script>
+</body>
+</html>
