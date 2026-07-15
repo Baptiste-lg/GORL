@@ -7,7 +7,6 @@ FROM golang:1.23 AS builder
 WORKDIR /usr/src/app
 
 # --- Dependency caching layer ---
-# Copy go.mod first so Docker can cache the module download step.
 COPY go.mod ./
 RUN go mod download 2>/dev/null || true
 
@@ -24,7 +23,6 @@ RUN cp "$(go env GOROOT)/misc/wasm/wasm_exec.js" web/ 2>/dev/null \
 # ============================================================
 # Stage 2: Runtime
 # Serves the static frontend + compiled WASM using nginx.
-# Alpine-based image keeps the final image small (~40MB).
 # ============================================================
 FROM nginx:1.27-alpine
 
@@ -32,59 +30,9 @@ FROM nginx:1.27-alpine
 RUN addgroup -g 1001 -S appgroup && \
     adduser -u 1001 -S appuser -G appgroup
 
-# Copy built assets from builder
+# Copy built assets and nginx config
 COPY --from=builder /usr/src/app/web/ /usr/share/nginx/html/
-
-RUN cat > /etc/nginx/conf.d/default.conf << 'NGINX'
-server {
-    listen 8080;
-    server_name _;
-    root /usr/share/nginx/html;
-    index index.html;
-
-    # --- MIME types ---
-    types {
-        application/wasm wasm;
-        application/javascript js;
-        text/css css;
-        text/html html;
-    }
-
-    # --- Security headers ---
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-
-    # --- Compression ---
-    gzip on;
-    gzip_types application/javascript application/wasm text/css text/html;
-    gzip_min_length 256;
-
-    # --- Caching ---
-    # WASM and JS: long cache
-    location ~* \.(wasm|js)$ {
-        expires 30d;
-        add_header Cache-Control "public, immutable";
-    }
-
-    # CSS and images: moderate cache
-    location ~* \.(css|png|jpg|jpeg|gif|ico|svg)$ {
-        expires 7d;
-        add_header Cache-Control "public";
-    }
-
-    # HTML: no cache to always serve the latest version
-    location ~* \.html$ {
-        expires -1;
-        add_header Cache-Control "no-store, no-cache, must-revalidate";
-    }
-
-    # SPA fallback
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-}
-NGINX
+COPY --from=builder /usr/src/app/web/nginx.conf /etc/nginx/conf.d/default.conf
 
 # Fix permissions for non-root execution
 RUN chown -R appuser:appgroup /usr/share/nginx/html && \
@@ -97,7 +45,6 @@ USER appuser
 
 EXPOSE 8080
 
-# Healthcheck to verify the container is serving
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget -qO- http://localhost:8080/ || exit 1
 
