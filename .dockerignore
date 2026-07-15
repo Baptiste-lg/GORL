@@ -1,0 +1,32 @@
+# Version control
+.git
+.gitignore
+.gitkeep
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Build artifacts
+web/main.wasm
+web/wasm_exec.js
+
+# Documentation
+README.md
+LICENSE
+*.md
+
+# Docker (prevent recursive copy)
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# CI
+.github
+
+# OS files
+.DS_Store
+Thumbs.db
