@@ -43,12 +43,12 @@ type Game struct {
 	floor         int
 	rng           *rand.Rand
 	killCount     int
+	streak        *KillStreak
 
 	// Audio
 	audioEngine *audio.Engine
 	music       *audio.MusicEngine
 	sfx         *audio.SFX
-	inCombat    bool
 
 	// Level-up state
 	levelChoices    []StatBoost
@@ -67,6 +67,7 @@ func New() *Game {
 		audioEngine: ae,
 		music:       audio.NewMusicEngine(ae),
 		sfx:         audio.NewSFX(ae),
+		streak:      NewKillStreak(),
 	}
 	g.registerInput()
 	return g
@@ -79,6 +80,7 @@ func (g *Game) startNewGame() {
 	g.player = nil
 	g.particles = render.NewParticleSystem()
 	g.groundItems = nil
+	g.streak = NewKillStreak()
 	g.generateFloor()
 	g.state = StatePlaying
 }
@@ -214,7 +216,6 @@ func (g *Game) handleLevelUpKey(key string) {
 			if g.player.Stats.XP < 0 {
 				g.player.Stats.XP = 0
 			}
-			// Refill HP on level up
 			g.player.Stats.HP = g.player.EffectiveStats().MaxHP()
 			g.state = StatePlaying
 		}
@@ -224,7 +225,6 @@ func (g *Game) handleLevelUpKey(key string) {
 func (g *Game) checkLevelUp() {
 	if g.player.Stats.CanLevelUp() {
 		g.sfx.LevelUp()
-		// Pick 3 random boosts (or all 4 if few enough)
 		perm := g.rng.Perm(len(allBoosts))
 		count := 3
 		if count > len(allBoosts) {
@@ -262,6 +262,18 @@ func (g *Game) processMovement() {
 
 	nx, ny := g.player.X+dx, g.player.Y+dy
 	dm := g.dungeonResult.Map
+
+	// Destructible walls: attack cracked wall to break it
+	if dm.At(nx, ny) == dungeon.TileCrackedWall {
+		dm.Set(nx, ny, dungeon.TileFloor)
+		g.sfx.Hit()
+		g.renderer.Shake(2.0, 0.1)
+		g.particles.SpawnText(nx, ny, "CRACK!", "#887755")
+		g.player.ResetMoveCooldown()
+		g.fov.Compute(dm, g.player.X, g.player.Y, fovRadius)
+		return
+	}
+
 	if !dm.At(nx, ny).Passable() {
 		return
 	}
@@ -284,10 +296,89 @@ func (g *Game) processMovement() {
 	// Pick up items
 	g.pickupItems()
 
+	// Check traps
+	g.checkTraps()
+
 	// Check stairs
 	if dm.At(g.player.X, g.player.Y) == dungeon.TileStairsDown {
 		g.sfx.Stairs()
 		g.nextFloor()
+	}
+}
+
+func (g *Game) checkTraps() {
+	trap := g.world.TrapAt(g.player.X, g.player.Y)
+	if trap == nil {
+		return
+	}
+
+	trap.Triggered = true
+	trap.Revealed = true
+
+	switch trap.Type {
+	case TrapSpike:
+		dmg := 5 + g.floor*2
+		g.player.Entity.TakeDamage(dmg)
+		g.particles.SpawnDamage(g.player.X, g.player.Y, dmg, "#aa4444")
+		g.particles.SpawnText(g.player.X, g.player.Y, "SPIKE TRAP!", "#aa4444")
+		g.sfx.Hit()
+		g.renderer.Shake(4.0, 0.2)
+	case TrapPoison:
+		// Apply a poison status effect
+		g.player.AddEffect(StatusEffect{
+			Name:      "Poisoned",
+			Remaining: 5.0,
+			Kind:      ScrollKind(100), // special kind for poison
+		})
+		g.particles.SpawnText(g.player.X, g.player.Y, "POISON TRAP!", "#44aa44")
+		g.sfx.Hit()
+	case TrapTeleport:
+		// Teleport to a random passable tile
+		dm := g.dungeonResult.Map
+		for attempts := 0; attempts < 100; attempts++ {
+			tx := g.rng.Intn(dungeon.MapWidth)
+			ty := g.rng.Intn(dungeon.MapHeight)
+			if dm.At(tx, ty).Passable() && g.world.EnemyAt(tx, ty) == nil {
+				g.player.X = tx
+				g.player.Y = ty
+				g.renderer.CenterCamera(g.player.X, g.player.Y)
+				g.fov.Compute(dm, g.player.X, g.player.Y, fovRadius)
+				break
+			}
+		}
+		g.particles.SpawnText(g.player.X, g.player.Y, "TELEPORT!", "#4444ee")
+		g.sfx.Stairs()
+	}
+
+	if !g.player.IsAlive {
+		g.sfx.Death()
+		g.renderer.Shake(10.0, 0.5)
+		g.state = StateDead
+	}
+}
+
+func (g *Game) processHazards(dt float64) {
+	hazards := g.world.HazardsAt(g.player.X, g.player.Y)
+	for _, h := range hazards {
+		h.DmgAccum += h.DPS * dt
+		if h.DmgAccum >= 1.0 {
+			dmg := int(h.DmgAccum)
+			h.DmgAccum -= float64(dmg)
+			g.player.Entity.TakeDamage(dmg)
+
+			color := "#ff4400"
+			if h.Type == HazardPoisonGas {
+				color = "#44cc44"
+			}
+			g.particles.SpawnDamage(g.player.X, g.player.Y, dmg, color)
+			g.player.LastCombat = 0
+		}
+	}
+
+	if !g.player.IsAlive {
+		g.sfx.Death()
+		g.renderer.Shake(10.0, 0.5)
+		g.state = StateDead
 	}
 }
 
@@ -328,14 +419,25 @@ func (g *Game) playerAttack(enemy *Enemy) {
 	}
 
 	if result.IsDeath {
-		xp := XPForKill(enemy.BaseXP, g.floor)
+		// Kill streak XP multiplier
+		mult := g.streak.RegisterKill()
+		xp := int(float64(XPForKill(enemy.BaseXP, g.floor)) * mult)
 		g.player.Stats.XP += xp
 		g.killCount++
-		g.particles.SpawnText(enemy.X, enemy.Y, "+"+itoa(xp)+"xp", "#FFD700")
+
+		xpText := "+" + itoa(xp) + "xp"
+		if mult > 1.0 {
+			xpText += " x" + itoa(int(mult*100)) + "%"
+		}
+		g.particles.SpawnText(enemy.X, enemy.Y, xpText, "#FFD700")
+
+		if g.streak.Active() {
+			g.particles.SpawnText(g.player.X, g.player.Y, g.streak.Label(), "#ff8800")
+		}
 
 		// Boss drops guaranteed rare+ loot
 		if enemy.Type.IsBoss() {
-			loot := GenerateLoot(g.rng, g.floor+5) // boosted floor for rarity
+			loot := GenerateLoot(g.rng, g.floor+5)
 			loot.X = enemy.X
 			loot.Y = enemy.Y
 			g.groundItems = append(g.groundItems, loot)
@@ -418,7 +520,6 @@ func (g *Game) processRegen(dt float64) {
 }
 
 func (g *Game) updateMusicState() {
-	// Check if any enemy is chasing the player
 	combat := false
 	boss := false
 	for _, e := range g.world.Enemies {
@@ -450,7 +551,9 @@ func (g *Game) Update(dt float64) {
 		g.world.UpdateEnemies(dt, g.player.X, g.player.Y)
 		g.processEnemyCombat()
 		g.world.RemoveDead()
+		g.processHazards(dt)
 		g.processRegen(dt)
+		g.streak.Update(dt)
 		g.particles.Update(dt)
 		g.renderer.UpdateCamera(dt)
 		g.updateMusicState()
@@ -478,6 +581,7 @@ func (g *Game) Render() {
 			XP:     g.player.Stats.XP,
 			XPNext: g.player.Stats.XPToNextLevel(),
 			Floor:  g.floor,
+			Streak: g.streak.Label(),
 		}
 		for _, eff := range g.player.Effects {
 			hudData.Effects = append(hudData.Effects, render.HUDEffect{
@@ -486,6 +590,21 @@ func (g *Game) Render() {
 			})
 		}
 		g.renderer.DrawHUD(hudData)
+
+		// Mini-map
+		g.renderer.DrawMiniMap(render.MiniMapData{
+			MapW:    dungeon.MapWidth,
+			MapH:    dungeon.MapHeight,
+			PlayerX: g.player.X,
+			PlayerY: g.player.Y,
+			IsExplored: func(x, y int) bool {
+				return g.fov.IsExplored(x, y)
+			},
+			IsWall: func(x, y int) bool {
+				t := g.dungeonResult.Map.At(x, y)
+				return t == dungeon.TileWall || t == dungeon.TileCrackedWall
+			},
+		})
 
 		// Overlays
 		switch g.state {
@@ -507,7 +626,6 @@ func (g *Game) Render() {
 }
 
 func (g *Game) renderMenu() {
-	// ASCII art title
 	g.renderer.DrawText(25, 8, " ####   ####  #####  #     ", "#00ff00")
 	g.renderer.DrawText(25, 9, "#    # #    # #    # #     ", "#00ff00")
 	g.renderer.DrawText(25, 10, "#      #    # #    # #     ", "#00ff00")
@@ -524,6 +642,32 @@ func (g *Game) renderMenu() {
 func (g *Game) renderGameWorld() {
 	theme := dungeon.ThemeForFloor(g.floor)
 	g.renderer.DrawDungeonThemed(g.dungeonResult.Map, g.fov, theme)
+
+	// Revealed traps
+	for _, trap := range g.world.Traps {
+		if trap.Revealed && g.fov.IsVisible(trap.X, trap.Y) {
+			vx := trap.X - g.renderer.CamX
+			vy := trap.Y - g.renderer.CamY
+			if vx >= 0 && vx < render.ViewTilesX && vy >= 0 && vy < render.ViewTilesY {
+				col := vx*render.TileCells + 1
+				row := vy*render.TileCells + 1
+				g.renderer.DrawChar(col, row, trap.Glyph(), trap.Color())
+			}
+		}
+	}
+
+	// Hazards
+	for _, haz := range g.world.Hazards {
+		if g.fov.IsVisible(haz.X, haz.Y) {
+			vx := haz.X - g.renderer.CamX
+			vy := haz.Y - g.renderer.CamY
+			if vx >= 0 && vx < render.ViewTilesX && vy >= 0 && vy < render.ViewTilesY {
+				col := vx*render.TileCells + 1
+				row := vy*render.TileCells + 1
+				g.renderer.DrawChar(col, row, haz.Glyph(), haz.Color())
+			}
+		}
+	}
 
 	// Ground items
 	for _, item := range g.groundItems {
@@ -549,10 +693,16 @@ func (g *Game) renderGameWorld() {
 		}
 	}
 
-	// Player
+	// Player with HP color fade
 	sprite := render.Sprites[g.player.Sprite]
 	if sprite != nil {
-		g.renderer.DrawSprite(sprite, 0, g.player.X, g.player.Y, sprite.Color)
+		hpRatio := 1.0
+		maxHP := g.player.EffectiveStats().MaxHP()
+		if maxHP > 0 {
+			hpRatio = float64(g.player.Stats.HP) / float64(maxHP)
+		}
+		color := render.HPColor(sprite.Color, hpRatio)
+		g.renderer.DrawSprite(sprite, 0, g.player.X, g.player.Y, color)
 	}
 
 	g.particles.Draw(g.renderer)
@@ -577,6 +727,9 @@ func (g *Game) renderDeath() {
 	g.renderer.DrawText(20, 20, "Floor: "+itoa(g.floor), "#aaaaaa")
 	g.renderer.DrawText(20, 21, "Level: "+itoa(g.player.Stats.Level), "#aaaaaa")
 	g.renderer.DrawText(20, 22, "Kills: "+itoa(g.killCount), "#aaaaaa")
+	if g.streak.Count > 2 {
+		g.renderer.DrawText(20, 23, "Best Streak: "+itoa(g.killCount), "#ff8800")
+	}
 	g.renderer.DrawText(18, 26, "Press ENTER to restart", "#aaaaaa")
 }
 
