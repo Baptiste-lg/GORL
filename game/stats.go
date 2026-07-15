@@ -89,6 +89,26 @@ func sqrt(x float64) float64 {
 	return z
 }
 
+// CanLevelUp returns true if the entity has enough XP.
+func (s Stats) CanLevelUp() bool {
+	return s.XP >= s.XPToNextLevel()
+}
+
+// LevelUpChoices returns 3 random stat boost options.
+type StatBoost struct {
+	Stat  string // "STR", "DEX", "VIT", "LCK"
+	Label string
+	Desc  string
+	Apply func(s *Stats)
+}
+
+var allBoosts = []StatBoost{
+	{"STR", "+2 STR", "Increase melee damage", func(s *Stats) { s.STR += 2 }},
+	{"DEX", "+2 DEX", "Move and attack faster", func(s *Stats) { s.DEX += 2 }},
+	{"VIT", "+2 VIT", "Gain more HP", func(s *Stats) { s.VIT += 2 }},
+	{"LCK", "+2 LCK", "Better crits and loot", func(s *Stats) { s.LCK += 2 }},
+}
+
 // DefaultPlayerStats returns starting stats for a new player.
 func DefaultPlayerStats() Stats {
 	s := Stats{
