@@ -1,45 +1,103 @@
-name: Deploy to GitHub Pages
+name: GORL CI/CD
 
 on:
   push:
     branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: "pages"
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  quality:
+    name: Code Quality
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "Files not formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Install staticcheck
+        run: go install honnef.co/go/tools/cmd/staticcheck@latest
+
+      - name: Run staticcheck
+        run: staticcheck ./...
+
+      - name: Verify WASM compilation
+        run: GOOS=js GOARCH=wasm go build -o /dev/null .
+
+  test:
+    name: Run Tests
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Run tests
+        run: go test -v -race ./...
+
+  deploy:
+    name: Build & Deploy to GitHub Pages
+    needs: test
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
+      - name: Install Go
+        uses: actions/setup-go@v5
         with:
           go-version: '1.22'
 
-      - name: Build WASM
-        run: GOOS=js GOARCH=wasm go build -o web/main.wasm .
+      - name: Build WASM Release
+        run: GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o web/main.wasm .
 
       - name: Copy wasm_exec.js
         run: cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" web/
 
-      - name: Setup Pages
+      - name: Configure Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v5
         with:
-          path: web/
+          path: ./web
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
