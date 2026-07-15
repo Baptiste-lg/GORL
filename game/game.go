@@ -5,6 +5,7 @@ import (
 	"syscall/js"
 	"time"
 
+	"github.com/Baptiste-lg/GORL/audio"
 	"github.com/Baptiste-lg/GORL/dungeon"
 	"github.com/Baptiste-lg/GORL/render"
 )
@@ -43,25 +44,36 @@ type Game struct {
 	rng           *rand.Rand
 	killCount     int
 
+	// Audio
+	audioEngine *audio.Engine
+	music       *audio.MusicEngine
+	sfx         *audio.SFX
+	inCombat    bool
+
 	// Level-up state
 	levelChoices    []StatBoost
 	levelUpSelected int
 }
 
 func New() *Game {
+	ae := audio.NewEngine()
 	g := &Game{
-		state:     StateMenu,
-		renderer:  render.NewRenderer(),
-		keys:      make(map[string]bool),
-		particles: render.NewParticleSystem(),
-		floor:     1,
-		rng:       rand.New(rand.NewSource(time.Now().UnixNano())),
+		state:       StateMenu,
+		renderer:    render.NewRenderer(),
+		keys:        make(map[string]bool),
+		particles:   render.NewParticleSystem(),
+		floor:       1,
+		rng:         rand.New(rand.NewSource(time.Now().UnixNano())),
+		audioEngine: ae,
+		music:       audio.NewMusicEngine(ae),
+		sfx:         audio.NewSFX(ae),
 	}
 	g.registerInput()
 	return g
 }
 
 func (g *Game) startNewGame() {
+	g.audioEngine.Resume()
 	g.floor = 1
 	g.killCount = 0
 	g.player = nil
@@ -129,6 +141,8 @@ func (g *Game) handleKeyDown(key string) {
 			g.state = StateInventory
 		case "Escape":
 			g.state = StatePaused
+		case "m", "M":
+			g.audioEngine.ToggleMute()
 		}
 	case StateInventory:
 		g.handleInventoryKey(key)
@@ -209,6 +223,7 @@ func (g *Game) handleLevelUpKey(key string) {
 
 func (g *Game) checkLevelUp() {
 	if g.player.Stats.CanLevelUp() {
+		g.sfx.LevelUp()
 		// Pick 3 random boosts (or all 4 if few enough)
 		perm := g.rng.Perm(len(allBoosts))
 		count := 3
@@ -264,12 +279,14 @@ func (g *Game) processMovement() {
 	g.player.ResetMoveCooldown()
 	g.renderer.CenterCamera(g.player.X, g.player.Y)
 	g.fov.Compute(dm, g.player.X, g.player.Y, fovRadius)
+	g.sfx.Footstep()
 
 	// Pick up items
 	g.pickupItems()
 
 	// Check stairs
 	if dm.At(g.player.X, g.player.Y) == dungeon.TileStairsDown {
+		g.sfx.Stairs()
 		g.nextFloor()
 	}
 }
@@ -280,6 +297,7 @@ func (g *Game) pickupItems() {
 		if item.X == g.player.X && item.Y == g.player.Y {
 			if g.player.Inventory.Add(item) {
 				g.particles.SpawnText(g.player.X, g.player.Y, item.Name, item.Rarity.Color())
+				g.sfx.Pickup()
 			} else {
 				remaining = append(remaining, item)
 			}
@@ -298,12 +316,15 @@ func (g *Game) playerAttack(enemy *Enemy) {
 
 	if result.IsDodge {
 		g.particles.SpawnMiss(enemy.X, enemy.Y)
+		g.sfx.Miss()
 		return
 	}
 	if result.IsCrit {
 		g.particles.SpawnCrit(enemy.X, enemy.Y, result.Damage)
+		g.sfx.CritHit()
 	} else {
 		g.particles.SpawnDamage(enemy.X, enemy.Y, result.Damage, "#ffffff")
+		g.sfx.Hit()
 	}
 
 	if result.IsDeath {
@@ -342,15 +363,22 @@ func (g *Game) enemyAttackPlayer(enemy *Enemy) {
 
 	if result.IsDodge {
 		g.particles.SpawnMiss(g.player.X, g.player.Y)
+		g.sfx.Miss()
 		return
 	}
 	if result.IsCrit {
 		g.particles.SpawnCrit(g.player.X, g.player.Y, result.Damage)
+		g.sfx.CritHit()
+		g.renderer.Shake(6.0, 0.3)
 	} else {
 		g.particles.SpawnDamage(g.player.X, g.player.Y, result.Damage, "#ff4444")
+		g.sfx.Hit()
+		g.renderer.Shake(3.0, 0.15)
 	}
 
 	if !g.player.IsAlive {
+		g.sfx.Death()
+		g.renderer.Shake(10.0, 0.5)
 		g.state = StateDead
 	}
 }
@@ -389,6 +417,31 @@ func (g *Game) processRegen(dt float64) {
 	}
 }
 
+func (g *Game) updateMusicState() {
+	// Check if any enemy is chasing the player
+	combat := false
+	boss := false
+	for _, e := range g.world.Enemies {
+		if !e.IsAlive {
+			continue
+		}
+		if e.AI == AIChase {
+			combat = true
+			if e.Type.IsBoss() {
+				boss = true
+			}
+		}
+	}
+
+	if boss {
+		g.music.SetState(audio.MusicBoss)
+	} else if combat {
+		g.music.SetState(audio.MusicCombat)
+	} else {
+		g.music.SetState(audio.MusicExplore)
+	}
+}
+
 func (g *Game) Update(dt float64) {
 	switch g.state {
 	case StatePlaying:
@@ -399,6 +452,9 @@ func (g *Game) Update(dt float64) {
 		g.world.RemoveDead()
 		g.processRegen(dt)
 		g.particles.Update(dt)
+		g.renderer.UpdateCamera(dt)
+		g.updateMusicState()
+		g.music.Update(g.audioEngine.CurrentTime())
 		g.checkLevelUp()
 	}
 }
@@ -462,10 +518,12 @@ func (g *Game) renderMenu() {
 	g.renderer.DrawText(24, 22, "Press ENTER to start", "#aaaaaa")
 	g.renderer.DrawText(24, 25, "WASD/Arrows: Move", "#555555")
 	g.renderer.DrawText(24, 26, "I: Inventory  ESC: Pause", "#555555")
+	g.renderer.DrawText(24, 27, "M: Toggle Music", "#555555")
 }
 
 func (g *Game) renderGameWorld() {
-	g.renderer.DrawDungeon(g.dungeonResult.Map, g.fov)
+	theme := dungeon.ThemeForFloor(g.floor)
+	g.renderer.DrawDungeonThemed(g.dungeonResult.Map, g.fov, theme)
 
 	// Ground items
 	for _, item := range g.groundItems {
