@@ -31,14 +31,14 @@ type Renderer struct {
 	CamY int
 
 	// Smooth camera (lerped pixel offset)
-	smoothX, smoothY   float64
-	targetX, targetY   float64
-	cameraSmooth       float64
+	smoothX, smoothY float64
+	targetX, targetY float64
+	cameraSmooth     float64
 
 	// Screen shake
-	shakeAmount  float64
+	shakeAmount   float64
 	shakeDuration float64
-	shakeTimer   float64
+	shakeTimer    float64
 }
 
 func NewRenderer() *Renderer {

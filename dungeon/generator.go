@@ -12,12 +12,12 @@ const (
 
 // GenerateResult holds the output of dungeon generation.
 type GenerateResult struct {
-	Map      *DungeonMap
-	Rooms    []*Room
-	SpawnX   int
-	SpawnY   int
-	StairsX  int
-	StairsY  int
+	Map     *DungeonMap
+	Rooms   []*Room
+	SpawnX  int
+	SpawnY  int
+	StairsX int
+	StairsY int
 }
 
 // Generate creates a new dungeon floor.

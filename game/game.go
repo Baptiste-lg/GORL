@@ -472,12 +472,12 @@ func (g *Game) Render() {
 		// HUD
 		es := g.player.EffectiveStats()
 		hudData := render.HUDData{
-			HP:    g.player.Stats.HP,
-			MaxHP: es.MaxHP(),
-			Level: g.player.Stats.Level,
-			XP:    g.player.Stats.XP,
+			HP:     g.player.Stats.HP,
+			MaxHP:  es.MaxHP(),
+			Level:  g.player.Stats.Level,
+			XP:     g.player.Stats.XP,
 			XPNext: g.player.Stats.XPToNextLevel(),
-			Floor: g.floor,
+			Floor:  g.floor,
 		}
 		for _, eff := range g.player.Effects {
 			hudData.Effects = append(hudData.Effects, render.HUDEffect{

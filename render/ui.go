@@ -26,12 +26,12 @@ func (r *Renderer) DrawBox(col, row, w, h int, borderColor, bgColor string) {
 
 // InventoryData holds what the UI needs to render the inventory screen.
 type InventoryData struct {
-	Items      []InventoryItem
-	WeaponName string
+	Items       []InventoryItem
+	WeaponName  string
 	WeaponColor string
-	ArmorName  string
-	ArmorColor string
-	Selected   int
+	ArmorName   string
+	ArmorColor  string
+	Selected    int
 }
 
 // InventoryItem is a simplified item for rendering.
