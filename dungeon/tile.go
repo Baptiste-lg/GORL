@@ -9,6 +9,7 @@ const (
 	TileDoor
 	TileStairsDown
 	TileStairsUp
+	TileCrackedWall
 )
 
 // Glyph returns the ASCII character for this tile.
@@ -16,6 +17,8 @@ func (t Tile) Glyph() string {
 	switch t {
 	case TileWall:
 		return "#"
+	case TileCrackedWall:
+		return "%"
 	case TileFloor:
 		return "."
 	case TileDoor:
@@ -79,6 +82,8 @@ func (t Tile) ThemedColor(theme Theme) string {
 	switch t {
 	case TileWall:
 		return themeColors[idx][0]
+	case TileCrackedWall:
+		return "#887755"
 	case TileFloor:
 		return themeColors[idx][1]
 	case TileDoor:
@@ -97,7 +102,12 @@ func (t Tile) Passable() bool {
 
 // BlocksSight returns true if this tile blocks line of sight.
 func (t Tile) BlocksSight() bool {
-	return t == TileWall || t == TileVoid
+	return t == TileWall || t == TileVoid || t == TileCrackedWall
+}
+
+// IsDestructible returns true if this wall can be broken by attacks.
+func (t Tile) IsDestructible() bool {
+	return t == TileCrackedWall
 }
 
 // DungeonMap holds the 2D grid of tiles for a single floor.

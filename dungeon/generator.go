@@ -43,6 +43,9 @@ func Generate(seed int64) *GenerateResult {
 	// Place doors at room entrances
 	placeDoors(dm, rooms)
 
+	// Place cracked (destructible) walls
+	placeCrackedWalls(dm, rooms, rng)
+
 	// Player spawns in center of first room
 	spawnX, spawnY := rooms[0].CenterX(), rooms[0].CenterY()
 
@@ -115,5 +118,30 @@ func checkDoor(dm *DungeonMap, x, y int) {
 
 	if (hWalls && hFloor) || (vWalls && vFloor) {
 		dm.Set(x, y, TileDoor)
+	}
+}
+
+// placeCrackedWalls randomly converts some walls adjacent to rooms into cracked walls.
+func placeCrackedWalls(dm *DungeonMap, rooms []*Room, rng *rand.Rand) {
+	for _, r := range rooms {
+		// Check perimeter walls of each room
+		for x := r.X - 1; x <= r.X+r.W; x++ {
+			maybeCrack(dm, x, r.Y-1, rng)
+			maybeCrack(dm, x, r.Y+r.H, rng)
+		}
+		for y := r.Y; y < r.Y+r.H; y++ {
+			maybeCrack(dm, r.X-1, y, rng)
+			maybeCrack(dm, r.X+r.W, y, rng)
+		}
+	}
+}
+
+func maybeCrack(dm *DungeonMap, x, y int, rng *rand.Rand) {
+	if !dm.InBounds(x, y) || dm.At(x, y) != TileWall {
+		return
+	}
+	// 5% chance to become a cracked wall
+	if rng.Intn(100) < 5 {
+		dm.Set(x, y, TileCrackedWall)
 	}
 }
