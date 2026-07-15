@@ -2,10 +2,10 @@ package game
 
 // KillStreak tracks rapid kills for combo bonuses.
 type KillStreak struct {
-	Count    int
-	Timer    float64 // seconds since last kill
-	Timeout  float64 // seconds before streak resets
-	BonusXP  float64 // XP multiplier for current streak
+	Count   int
+	Timer   float64 // seconds since last kill
+	Timeout float64 // seconds before streak resets
+	BonusXP float64 // XP multiplier for current streak
 }
 
 // NewKillStreak creates a kill streak tracker.

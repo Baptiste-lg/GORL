@@ -6,8 +6,8 @@ import "math/rand"
 type HazardType int
 
 const (
-	HazardLava      HazardType = iota // Deals fire damage per tick
-	HazardPoisonGas                   // Deals poison damage per tick
+	HazardLava      HazardType = iota
+	HazardPoisonGas
 )
 
 // Hazard is a persistent area-of-effect zone on the map.

@@ -121,13 +121,13 @@ var SpawnTable = []struct {
 // Enemy is a hostile entity with AI behavior.
 type Enemy struct {
 	*Entity
-	Type         EnemyType
-	AI           AIState
-	ActionTimer  float64 // seconds until next action
-	PatrolDX     int     // current patrol direction
-	PatrolDY     int
-	PatrolSteps  int // steps remaining in current patrol direction
-	BaseXP       int
+	Type        EnemyType
+	AI          AIState
+	ActionTimer float64
+	PatrolDX    int
+	PatrolDY    int
+	PatrolSteps int
+	BaseXP      int
 }
 
 // NewEnemy creates an enemy from a definition, scaled to the given floor.

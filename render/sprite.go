@@ -48,7 +48,7 @@ func HPColor(baseColor string, hpRatio float64) string {
 var Sprites = map[string]*Sprite{
 	"player": {
 		Frames: [][]string{
-			{" O ", "/|\\", "/ \\"},  // idle
+			{" O ", "/|\\", "/ \\"}, // idle
 			{" O ", "/|\\", "| |"},  // walk
 		},
 		Color:  "#00ff00",

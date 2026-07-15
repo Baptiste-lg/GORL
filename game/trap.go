@@ -6,16 +6,16 @@ import "math/rand"
 type TrapType int
 
 const (
-	TrapSpike    TrapType = iota // Deals damage
-	TrapPoison                   // Deals damage over time
-	TrapTeleport                 // Teleports to random floor tile
+	TrapSpike    TrapType = iota
+	TrapPoison
+	TrapTeleport
 )
 
 // Trap is a hidden hazard on a floor tile.
 type Trap struct {
-	X, Y     int
-	Type     TrapType
-	Revealed bool
+	X, Y      int
+	Type      TrapType
+	Revealed  bool
 	Triggered bool
 }
 
