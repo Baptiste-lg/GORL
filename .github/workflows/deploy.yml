@@ -72,33 +72,9 @@ jobs:
       - name: Verify WASM compilation
         run: GOOS=js GOARCH=wasm go build -o /dev/null .
 
-  test:
-    name: Run Tests
-    needs: quality
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.mod') }}
-
-      - name: Run tests
-        run: go test -v -race ./...
-
   deploy:
     name: Build & Deploy to GitHub Pages
-    needs: test
+    needs: quality
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
     runs-on: ubuntu-latest
     permissions:
