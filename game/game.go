@@ -22,8 +22,9 @@ const (
 
 const (
 	fovRadius     = 8
-	regenDelay    = 3.0 // seconds after combat before regen starts
-	regenInterval = 5.0 // seconds between regen ticks
+	regenDelay    = 3.0
+	regenInterval = 5.0
+	lootDropRate  = 0.35 // 35% chance to drop loot on kill
 )
 
 type Game struct {
@@ -37,6 +38,7 @@ type Game struct {
 	player        *Player
 	world         *World
 	particles     *render.ParticleSystem
+	groundItems   []*Item
 	floor         int
 	rng           *rand.Rand
 	killCount     int
@@ -60,6 +62,7 @@ func (g *Game) startNewGame() {
 	g.killCount = 0
 	g.player = nil
 	g.particles = render.NewParticleSystem()
+	g.groundItems = nil
 	g.generateFloor()
 	g.state = StatePlaying
 }
@@ -69,6 +72,7 @@ func (g *Game) generateFloor() {
 	g.dungeonResult = dungeon.Generate(seed)
 	g.fov = dungeon.NewFOV(dungeon.MapWidth, dungeon.MapHeight)
 	g.world = NewWorld(g.dungeonResult, g.floor, g.rng)
+	g.groundItems = nil
 
 	sx, sy := g.dungeonResult.SpawnX, g.dungeonResult.SpawnY
 	if g.player == nil {
@@ -109,6 +113,46 @@ func (g *Game) handleKeyDown(key string) {
 	case StateDead:
 		if key == "Enter" {
 			g.state = StateMenu
+		}
+	case StatePlaying:
+		switch key {
+		case "i", "I":
+			g.state = StateInventory
+		}
+	case StateInventory:
+		g.handleInventoryKey(key)
+	}
+}
+
+func (g *Game) handleInventoryKey(key string) {
+	inv := g.player.Inventory
+	switch key {
+	case "i", "I", "Escape":
+		g.state = StatePlaying
+	case "ArrowUp":
+		if inv.Selected > 0 {
+			inv.Selected--
+		}
+	case "ArrowDown":
+		if inv.Selected < len(inv.Items)-1 {
+			inv.Selected++
+		}
+	case "Enter":
+		item := inv.SelectedItem()
+		if item == nil {
+			return
+		}
+		if item.Type == ItemWeapon || item.Type == ItemArmor {
+			inv.Equip(inv.Selected)
+		} else {
+			g.player.UseItem(inv.Selected)
+		}
+	case "d", "D":
+		item := inv.Remove(inv.Selected)
+		if item != nil {
+			item.X = g.player.X
+			item.Y = g.player.Y
+			g.groundItems = append(g.groundItems, item)
 		}
 	}
 }
@@ -153,10 +197,32 @@ func (g *Game) processMovement() {
 	g.player.ResetMoveCooldown()
 	g.renderer.CenterCamera(g.player.X, g.player.Y)
 	g.fov.Compute(dm, g.player.X, g.player.Y, fovRadius)
+
+	// Pick up items on the ground
+	g.pickupItems()
+}
+
+func (g *Game) pickupItems() {
+	remaining := g.groundItems[:0]
+	for _, item := range g.groundItems {
+		if item.X == g.player.X && item.Y == g.player.Y {
+			if g.player.Inventory.Add(item) {
+				g.particles.SpawnText(g.player.X, g.player.Y, item.Name, item.Rarity.Color())
+			} else {
+				remaining = append(remaining, item) // inventory full
+			}
+		} else {
+			remaining = append(remaining, item)
+		}
+	}
+	g.groundItems = remaining
 }
 
 func (g *Game) playerAttack(enemy *Enemy) {
-	result := ResolveAttack(g.player.Entity, enemy.Entity, g.rng)
+	// Use effective stats for combat
+	attacker := *g.player.Entity
+	attacker.Stats = g.player.EffectiveStats()
+	result := ResolveAttack(&attacker, enemy.Entity, g.rng)
 	g.player.LastCombat = 0
 
 	if result.IsDodge {
@@ -174,11 +240,32 @@ func (g *Game) playerAttack(enemy *Enemy) {
 		g.player.Stats.XP += xp
 		g.killCount++
 		g.particles.SpawnText(enemy.X, enemy.Y, "+"+itoa(xp)+"xp", "#FFD700")
+
+		// Loot drop
+		if g.rng.Float64() < lootDropRate {
+			loot := GenerateLoot(g.rng, g.floor)
+			loot.X = enemy.X
+			loot.Y = enemy.Y
+			g.groundItems = append(g.groundItems, loot)
+		}
 	}
 }
 
 func (g *Game) enemyAttackPlayer(enemy *Enemy) {
-	result := ResolveAttack(enemy.Entity, g.player.Entity, g.rng)
+	// Use effective stats for defense
+	defender := *g.player.Entity
+	defender.Stats = g.player.EffectiveStats()
+
+	// Shield scroll bonus
+	if g.player.HasEffect(ScrollShield) {
+		defender.Stats.VIT += defender.Stats.VIT / 2 // +50% defense
+	}
+
+	result := ResolveAttack(enemy.Entity, &defender, g.rng)
+	// Apply damage to actual player HP
+	if !result.IsDodge {
+		g.player.Entity.TakeDamage(result.Damage)
+	}
 	g.player.LastCombat = 0
 
 	if result.IsDodge {
@@ -191,7 +278,7 @@ func (g *Game) enemyAttackPlayer(enemy *Enemy) {
 		g.particles.SpawnDamage(g.player.X, g.player.Y, result.Damage, "#ff4444")
 	}
 
-	if result.IsDeath {
+	if !g.player.IsAlive {
 		g.state = StateDead
 	}
 }
@@ -201,7 +288,6 @@ func (g *Game) processEnemyCombat() {
 		if !e.IsAlive {
 			continue
 		}
-		// Enemy attacks if adjacent to player
 		dx := e.X - g.player.X
 		dy := e.Y - g.player.Y
 		if dx < 0 {
@@ -252,10 +338,24 @@ func (g *Game) Render() {
 		g.renderer.DrawText(30, 15, "G O R L", "#ffffff")
 		g.renderer.DrawText(25, 18, "Go Roguelike", "#888888")
 		g.renderer.DrawText(22, 25, "Press ENTER to start", "#aaaaaa")
-	case StatePlaying:
+
+	case StatePlaying, StateInventory:
 		g.renderer.DrawDungeon(g.dungeonResult.Map, g.fov)
 
-		// Draw enemies (only if visible)
+		// Draw ground items (only if visible)
+		for _, item := range g.groundItems {
+			if g.fov.IsVisible(item.X, item.Y) {
+				vx := item.X - g.renderer.CamX
+				vy := item.Y - g.renderer.CamY
+				if vx >= 0 && vx < render.ViewTilesX && vy >= 0 && vy < render.ViewTilesY {
+					col := vx*render.TileCells + 1
+					row := vy*render.TileCells + 1
+					g.renderer.DrawChar(col, row, item.Glyph(), item.Rarity.Color())
+				}
+			}
+		}
+
+		// Draw enemies
 		for _, e := range g.world.Enemies {
 			if !e.IsAlive || !g.fov.IsVisible(e.X, e.Y) {
 				continue
@@ -272,13 +372,55 @@ func (g *Game) Render() {
 			g.renderer.DrawSprite(sprite, 0, g.player.X, g.player.Y, sprite.Color)
 		}
 
-		// Draw particles
 		g.particles.Draw(g.renderer)
+
+		// Inventory overlay
+		if g.state == StateInventory {
+			g.renderer.DrawInventory(g.buildInventoryData())
+		}
+
 	case StateDead:
 		g.renderer.DrawText(28, 15, "YOU DIED", "#ff0000")
 		g.renderer.DrawText(22, 18, "Floor: "+itoa(g.floor)+"  Kills: "+itoa(g.killCount), "#aaaaaa")
 		g.renderer.DrawText(20, 25, "Press ENTER to restart", "#aaaaaa")
 	}
+}
+
+func (g *Game) buildInventoryData() render.InventoryData {
+	inv := g.player.Inventory
+	data := render.InventoryData{
+		Selected: inv.Selected,
+	}
+	if inv.Weapon != nil {
+		data.WeaponName = inv.Weapon.Name
+		data.WeaponColor = inv.Weapon.Rarity.Color()
+	}
+	if inv.Armor != nil {
+		data.ArmorName = inv.Armor.Name
+		data.ArmorColor = inv.Armor.Rarity.Color()
+	}
+	for _, item := range inv.Items {
+		detail := ""
+		if item.BonusSTR > 0 {
+			detail += "+" + itoa(item.BonusSTR) + " STR "
+		}
+		if item.BonusDEX > 0 {
+			detail += "+" + itoa(item.BonusDEX) + " DEX "
+		}
+		if item.BonusVIT > 0 {
+			detail += "+" + itoa(item.BonusVIT) + " VIT "
+		}
+		if item.BonusLCK > 0 {
+			detail += "+" + itoa(item.BonusLCK) + " LCK "
+		}
+		data.Items = append(data.Items, render.InventoryItem{
+			Name:   item.Name,
+			Glyph:  item.Glyph(),
+			Color:  item.Rarity.Color(),
+			Detail: detail,
+		})
+	}
+	return data
 }
 
 // Run starts the game loop using requestAnimationFrame.
@@ -318,7 +460,6 @@ func itoa(n int) string {
 	if neg {
 		buf = append(buf, '-')
 	}
-	// reverse
 	for i, j := 0, len(buf)-1; i < j; i, j = i+1, j-1 {
 		buf[i], buf[j] = buf[j], buf[i]
 	}
