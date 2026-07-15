@@ -24,7 +24,7 @@ const (
 	fovRadius     = 8
 	regenDelay    = 3.0
 	regenInterval = 5.0
-	lootDropRate  = 0.35 // 35% chance to drop loot on kill
+	lootDropRate  = 0.35
 )
 
 type Game struct {
@@ -42,6 +42,10 @@ type Game struct {
 	floor         int
 	rng           *rand.Rand
 	killCount     int
+
+	// Level-up state
+	levelChoices    []StatBoost
+	levelUpSelected int
 }
 
 func New() *Game {
@@ -86,6 +90,11 @@ func (g *Game) generateFloor() {
 	g.fov.Compute(g.dungeonResult.Map, g.player.X, g.player.Y, fovRadius)
 }
 
+func (g *Game) nextFloor() {
+	g.floor++
+	g.generateFloor()
+}
+
 func (g *Game) registerInput() {
 	doc := js.Global().Get("document")
 
@@ -118,9 +127,24 @@ func (g *Game) handleKeyDown(key string) {
 		switch key {
 		case "i", "I":
 			g.state = StateInventory
+		case "Escape":
+			g.state = StatePaused
 		}
 	case StateInventory:
 		g.handleInventoryKey(key)
+	case StatePaused:
+		g.handlePauseKey(key)
+	case StateLevelUp:
+		g.handleLevelUpKey(key)
+	}
+}
+
+func (g *Game) handlePauseKey(key string) {
+	switch key {
+	case "Escape", "r", "R":
+		g.state = StatePlaying
+	case "q", "Q":
+		g.state = StateMenu
 	}
 }
 
@@ -154,6 +178,49 @@ func (g *Game) handleInventoryKey(key string) {
 			item.Y = g.player.Y
 			g.groundItems = append(g.groundItems, item)
 		}
+	}
+}
+
+func (g *Game) handleLevelUpKey(key string) {
+	switch key {
+	case "ArrowUp":
+		if g.levelUpSelected > 0 {
+			g.levelUpSelected--
+		}
+	case "ArrowDown":
+		if g.levelUpSelected < len(g.levelChoices)-1 {
+			g.levelUpSelected++
+		}
+	case "Enter":
+		if g.levelUpSelected >= 0 && g.levelUpSelected < len(g.levelChoices) {
+			choice := g.levelChoices[g.levelUpSelected]
+			choice.Apply(&g.player.Stats)
+			g.player.Stats.Level++
+			g.player.Stats.XP -= g.player.Stats.XPToNextLevel()
+			if g.player.Stats.XP < 0 {
+				g.player.Stats.XP = 0
+			}
+			// Refill HP on level up
+			g.player.Stats.HP = g.player.EffectiveStats().MaxHP()
+			g.state = StatePlaying
+		}
+	}
+}
+
+func (g *Game) checkLevelUp() {
+	if g.player.Stats.CanLevelUp() {
+		// Pick 3 random boosts (or all 4 if few enough)
+		perm := g.rng.Perm(len(allBoosts))
+		count := 3
+		if count > len(allBoosts) {
+			count = len(allBoosts)
+		}
+		g.levelChoices = make([]StatBoost, count)
+		for i := 0; i < count; i++ {
+			g.levelChoices[i] = allBoosts[perm[i]]
+		}
+		g.levelUpSelected = 0
+		g.state = StateLevelUp
 	}
 }
 
@@ -198,8 +265,13 @@ func (g *Game) processMovement() {
 	g.renderer.CenterCamera(g.player.X, g.player.Y)
 	g.fov.Compute(dm, g.player.X, g.player.Y, fovRadius)
 
-	// Pick up items on the ground
+	// Pick up items
 	g.pickupItems()
+
+	// Check stairs
+	if dm.At(g.player.X, g.player.Y) == dungeon.TileStairsDown {
+		g.nextFloor()
+	}
 }
 
 func (g *Game) pickupItems() {
@@ -209,7 +281,7 @@ func (g *Game) pickupItems() {
 			if g.player.Inventory.Add(item) {
 				g.particles.SpawnText(g.player.X, g.player.Y, item.Name, item.Rarity.Color())
 			} else {
-				remaining = append(remaining, item) // inventory full
+				remaining = append(remaining, item)
 			}
 		} else {
 			remaining = append(remaining, item)
@@ -219,7 +291,6 @@ func (g *Game) pickupItems() {
 }
 
 func (g *Game) playerAttack(enemy *Enemy) {
-	// Use effective stats for combat
 	attacker := *g.player.Entity
 	attacker.Stats = g.player.EffectiveStats()
 	result := ResolveAttack(&attacker, enemy.Entity, g.rng)
@@ -241,8 +312,13 @@ func (g *Game) playerAttack(enemy *Enemy) {
 		g.killCount++
 		g.particles.SpawnText(enemy.X, enemy.Y, "+"+itoa(xp)+"xp", "#FFD700")
 
-		// Loot drop
-		if g.rng.Float64() < lootDropRate {
+		// Boss drops guaranteed rare+ loot
+		if enemy.Type.IsBoss() {
+			loot := GenerateLoot(g.rng, g.floor+5) // boosted floor for rarity
+			loot.X = enemy.X
+			loot.Y = enemy.Y
+			g.groundItems = append(g.groundItems, loot)
+		} else if g.rng.Float64() < lootDropRate {
 			loot := GenerateLoot(g.rng, g.floor)
 			loot.X = enemy.X
 			loot.Y = enemy.Y
@@ -252,17 +328,13 @@ func (g *Game) playerAttack(enemy *Enemy) {
 }
 
 func (g *Game) enemyAttackPlayer(enemy *Enemy) {
-	// Use effective stats for defense
 	defender := *g.player.Entity
 	defender.Stats = g.player.EffectiveStats()
-
-	// Shield scroll bonus
 	if g.player.HasEffect(ScrollShield) {
-		defender.Stats.VIT += defender.Stats.VIT / 2 // +50% defense
+		defender.Stats.VIT += defender.Stats.VIT / 2
 	}
 
 	result := ResolveAttack(enemy.Entity, &defender, g.rng)
-	// Apply damage to actual player HP
 	if !result.IsDodge {
 		g.player.Entity.TakeDamage(result.Damage)
 	}
@@ -327,6 +399,7 @@ func (g *Game) Update(dt float64) {
 		g.world.RemoveDead()
 		g.processRegen(dt)
 		g.particles.Update(dt)
+		g.checkLevelUp()
 	}
 }
 
@@ -335,55 +408,118 @@ func (g *Game) Render() {
 
 	switch g.state {
 	case StateMenu:
-		g.renderer.DrawText(30, 15, "G O R L", "#ffffff")
-		g.renderer.DrawText(25, 18, "Go Roguelike", "#888888")
-		g.renderer.DrawText(22, 25, "Press ENTER to start", "#aaaaaa")
+		g.renderMenu()
 
-	case StatePlaying, StateInventory:
-		g.renderer.DrawDungeon(g.dungeonResult.Map, g.fov)
+	case StatePlaying, StateInventory, StateLevelUp, StatePaused:
+		g.renderGameWorld()
 
-		// Draw ground items (only if visible)
-		for _, item := range g.groundItems {
-			if g.fov.IsVisible(item.X, item.Y) {
-				vx := item.X - g.renderer.CamX
-				vy := item.Y - g.renderer.CamY
-				if vx >= 0 && vx < render.ViewTilesX && vy >= 0 && vy < render.ViewTilesY {
-					col := vx*render.TileCells + 1
-					row := vy*render.TileCells + 1
-					g.renderer.DrawChar(col, row, item.Glyph(), item.Rarity.Color())
-				}
-			}
+		// HUD
+		es := g.player.EffectiveStats()
+		hudData := render.HUDData{
+			HP:    g.player.Stats.HP,
+			MaxHP: es.MaxHP(),
+			Level: g.player.Stats.Level,
+			XP:    g.player.Stats.XP,
+			XPNext: g.player.Stats.XPToNextLevel(),
+			Floor: g.floor,
 		}
-
-		// Draw enemies
-		for _, e := range g.world.Enemies {
-			if !e.IsAlive || !g.fov.IsVisible(e.X, e.Y) {
-				continue
-			}
-			sprite := render.Sprites[e.Sprite]
-			if sprite != nil {
-				g.renderer.DrawSprite(sprite, 0, e.X, e.Y, sprite.Color)
-			}
+		for _, eff := range g.player.Effects {
+			hudData.Effects = append(hudData.Effects, render.HUDEffect{
+				Name:      eff.Name,
+				Remaining: eff.Remaining,
+			})
 		}
+		g.renderer.DrawHUD(hudData)
 
-		// Draw player sprite
-		sprite := render.Sprites[g.player.Sprite]
-		if sprite != nil {
-			g.renderer.DrawSprite(sprite, 0, g.player.X, g.player.Y, sprite.Color)
-		}
-
-		g.particles.Draw(g.renderer)
-
-		// Inventory overlay
-		if g.state == StateInventory {
+		// Overlays
+		switch g.state {
+		case StateInventory:
 			g.renderer.DrawInventory(g.buildInventoryData())
+		case StateLevelUp:
+			choices := make([]render.LevelUpChoice, len(g.levelChoices))
+			for i, c := range g.levelChoices {
+				choices[i] = render.LevelUpChoice{Label: c.Label, Desc: c.Desc}
+			}
+			g.renderer.DrawLevelUp(g.player.Stats.Level+1, choices, g.levelUpSelected)
+		case StatePaused:
+			g.renderPause()
 		}
 
 	case StateDead:
-		g.renderer.DrawText(28, 15, "YOU DIED", "#ff0000")
-		g.renderer.DrawText(22, 18, "Floor: "+itoa(g.floor)+"  Kills: "+itoa(g.killCount), "#aaaaaa")
-		g.renderer.DrawText(20, 25, "Press ENTER to restart", "#aaaaaa")
+		g.renderDeath()
 	}
+}
+
+func (g *Game) renderMenu() {
+	// ASCII art title
+	g.renderer.DrawText(25, 8, " ####   ####  #####  #     ", "#00ff00")
+	g.renderer.DrawText(25, 9, "#    # #    # #    # #     ", "#00ff00")
+	g.renderer.DrawText(25, 10, "#      #    # #    # #     ", "#00ff00")
+	g.renderer.DrawText(25, 11, "#  ### #    # #####  #     ", "#00cc00")
+	g.renderer.DrawText(25, 12, "#    # #    # #   #  #     ", "#00cc00")
+	g.renderer.DrawText(25, 13, " ####   ####  #    # ######", "#009900")
+	g.renderer.DrawText(28, 16, "Go Roguelike", "#888888")
+	g.renderer.DrawText(24, 22, "Press ENTER to start", "#aaaaaa")
+	g.renderer.DrawText(24, 25, "WASD/Arrows: Move", "#555555")
+	g.renderer.DrawText(24, 26, "I: Inventory  ESC: Pause", "#555555")
+}
+
+func (g *Game) renderGameWorld() {
+	g.renderer.DrawDungeon(g.dungeonResult.Map, g.fov)
+
+	// Ground items
+	for _, item := range g.groundItems {
+		if g.fov.IsVisible(item.X, item.Y) {
+			vx := item.X - g.renderer.CamX
+			vy := item.Y - g.renderer.CamY
+			if vx >= 0 && vx < render.ViewTilesX && vy >= 0 && vy < render.ViewTilesY {
+				col := vx*render.TileCells + 1
+				row := vy*render.TileCells + 1
+				g.renderer.DrawChar(col, row, item.Glyph(), item.Rarity.Color())
+			}
+		}
+	}
+
+	// Enemies
+	for _, e := range g.world.Enemies {
+		if !e.IsAlive || !g.fov.IsVisible(e.X, e.Y) {
+			continue
+		}
+		sprite := render.Sprites[e.Sprite]
+		if sprite != nil {
+			g.renderer.DrawSprite(sprite, 0, e.X, e.Y, sprite.Color)
+		}
+	}
+
+	// Player
+	sprite := render.Sprites[g.player.Sprite]
+	if sprite != nil {
+		g.renderer.DrawSprite(sprite, 0, g.player.X, g.player.Y, sprite.Color)
+	}
+
+	g.particles.Draw(g.renderer)
+}
+
+func (g *Game) renderPause() {
+	boxW, boxH := 30, 10
+	ox, oy := (render.GridCols-boxW)/2, (render.GridRows-boxH)/2
+	g.renderer.DrawBox(ox, oy, boxW, boxH, "#888888", "#111111")
+	g.renderer.DrawText(ox+10, oy+1, "PAUSED", "#ffffff")
+	g.renderer.DrawText(ox+3, oy+4, "ESC/R: Resume", "#aaaaaa")
+	g.renderer.DrawText(ox+3, oy+6, "Q: Quit to Menu", "#aaaaaa")
+}
+
+func (g *Game) renderDeath() {
+	g.renderer.DrawText(24, 10, "#   # ####  #   #", "#ff0000")
+	g.renderer.DrawText(24, 11, " # #  #   # #   #", "#ff0000")
+	g.renderer.DrawText(24, 12, "  #   #   # #   #", "#cc0000")
+	g.renderer.DrawText(24, 13, "  #   #   # #   #", "#cc0000")
+	g.renderer.DrawText(24, 14, "  #   ####   ### ", "#990000")
+	g.renderer.DrawText(22, 16, "D  I  E  D", "#ff0000")
+	g.renderer.DrawText(20, 20, "Floor: "+itoa(g.floor), "#aaaaaa")
+	g.renderer.DrawText(20, 21, "Level: "+itoa(g.player.Stats.Level), "#aaaaaa")
+	g.renderer.DrawText(20, 22, "Kills: "+itoa(g.killCount), "#aaaaaa")
+	g.renderer.DrawText(18, 26, "Press ENTER to restart", "#aaaaaa")
 }
 
 func (g *Game) buildInventoryData() render.InventoryData {
