@@ -29,6 +29,16 @@ type Renderer struct {
 	// Camera center in tile coordinates
 	CamX int
 	CamY int
+
+	// Smooth camera (lerped pixel offset)
+	smoothX, smoothY   float64
+	targetX, targetY   float64
+	cameraSmooth       float64
+
+	// Screen shake
+	shakeAmount  float64
+	shakeDuration float64
+	shakeTimer   float64
 }
 
 func NewRenderer() *Renderer {
@@ -43,8 +53,9 @@ func NewRenderer() *Renderer {
 	ctx.Set("textBaseline", "top")
 
 	return &Renderer{
-		ctx:    ctx,
-		canvas: canvas,
+		ctx:          ctx,
+		canvas:       canvas,
+		cameraSmooth: 8.0,
 	}
 }
 
@@ -52,16 +63,70 @@ func NewRenderer() *Renderer {
 func (r *Renderer) CenterCamera(tx, ty int) {
 	r.CamX = tx - ViewTilesX/2
 	r.CamY = ty - ViewTilesY/2
+	r.targetX = float64(r.CamX * TileCells * CellWidth)
+	r.targetY = float64(r.CamY * TileCells * CellHeight)
 }
 
-// Clear fills the entire canvas with black.
+// Shake triggers a screen shake effect.
+func (r *Renderer) Shake(amount, duration float64) {
+	r.shakeAmount = amount
+	r.shakeDuration = duration
+	r.shakeTimer = duration
+}
+
+// UpdateCamera updates smooth camera and shake. Call once per frame.
+func (r *Renderer) UpdateCamera(dt float64) {
+	// Lerp smooth camera
+	r.smoothX += (r.targetX - r.smoothX) * r.cameraSmooth * dt
+	r.smoothY += (r.targetY - r.smoothY) * r.cameraSmooth * dt
+
+	// Update shake
+	if r.shakeTimer > 0 {
+		r.shakeTimer -= dt
+		if r.shakeTimer < 0 {
+			r.shakeTimer = 0
+		}
+	}
+}
+
+// Clear fills the entire canvas with black and applies shake offset.
 func (r *Renderer) Clear() {
+	r.ctx.Call("setTransform", 1, 0, 0, 1, 0, 0) // reset transform
 	r.ctx.Set("fillStyle", "#000000")
 	r.ctx.Call("fillRect", 0, 0, CanvasW, CanvasH)
+
+	// Apply shake as canvas translate
+	if r.shakeTimer > 0 {
+		progress := r.shakeTimer / r.shakeDuration
+		magnitude := r.shakeAmount * progress
+		// Simple pseudo-random shake using timer value
+		sx := magnitude * sinApprox(r.shakeTimer*73.0)
+		sy := magnitude * sinApprox(r.shakeTimer*97.0)
+		r.ctx.Call("setTransform", 1, 0, 0, 1, sx, sy)
+	}
+}
+
+func sinApprox(x float64) float64 {
+	// Fast sin approximation for shake
+	for x > 6.28 {
+		x -= 6.28
+	}
+	for x < -6.28 {
+		x += 6.28
+	}
+	if x < 0 {
+		return x * (1.27 + 0.405*x)
+	}
+	return x * (1.27 - 0.405*x)
 }
 
 // DrawDungeon renders the visible portion of the dungeon map with FOV.
 func (r *Renderer) DrawDungeon(dm *dungeon.DungeonMap, fov *dungeon.FOV) {
+	r.DrawDungeonThemed(dm, fov, dungeon.ThemeStone)
+}
+
+// DrawDungeonThemed renders the dungeon with a specific color theme.
+func (r *Renderer) DrawDungeonThemed(dm *dungeon.DungeonMap, fov *dungeon.FOV, theme dungeon.Theme) {
 	for vy := 0; vy < ViewTilesY; vy++ {
 		for vx := 0; vx < ViewTilesX; vx++ {
 			wx := r.CamX + vx
@@ -72,14 +137,13 @@ func (r *Renderer) DrawDungeon(dm *dungeon.DungeonMap, fov *dungeon.FOV) {
 				continue
 			}
 
-			// Screen cell position (center of the 3x3 block)
 			col := vx*TileCells + 1
 			row := vy*TileCells + 1
 
 			if fov.IsVisible(wx, wy) {
-				r.DrawChar(col, row, tile.Glyph(), tile.Color())
+				r.DrawChar(col, row, tile.Glyph(), tile.ThemedColor(theme))
 			} else if fov.IsExplored(wx, wy) {
-				r.DrawChar(col, row, tile.Glyph(), dimColor(tile.Color()))
+				r.DrawChar(col, row, tile.Glyph(), dimColor(tile.ThemedColor(theme)))
 			}
 		}
 	}
