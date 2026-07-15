@@ -23,15 +23,15 @@ type Loadout struct {
 
 var AllLoadouts = []Loadout{
 	{
-		ID:   LoadoutDefault,
-		Name: "Adventurer",
-		Desc: "Balanced stats, no gear",
+		ID:    LoadoutDefault,
+		Name:  "Adventurer",
+		Desc:  "Balanced stats, no gear",
 		Stats: Stats{STR: 3, DEX: 3, VIT: 3, LCK: 2, Level: 1},
 	},
 	{
-		ID:   LoadoutWarrior,
-		Name: "Warrior",
-		Desc: "High STR/VIT, starts with a sword",
+		ID:    LoadoutWarrior,
+		Name:  "Warrior",
+		Desc:  "High STR/VIT, starts with a sword",
 		Stats: Stats{STR: 5, DEX: 2, VIT: 4, LCK: 1, Level: 1},
 		Weapon: &Item{
 			Name: "Rusty Longsword", Type: ItemWeapon,
@@ -39,15 +39,15 @@ var AllLoadouts = []Loadout{
 		},
 	},
 	{
-		ID:   LoadoutScout,
-		Name: "Scout",
-		Desc: "High DEX/LCK, fast and lucky",
+		ID:    LoadoutScout,
+		Name:  "Scout",
+		Desc:  "High DEX/LCK, fast and lucky",
 		Stats: Stats{STR: 2, DEX: 6, VIT: 2, LCK: 3, Level: 1},
 	},
 	{
-		ID:   LoadoutGambler,
-		Name: "Gambler",
-		Desc: "Max LCK, random starting stats",
+		ID:    LoadoutGambler,
+		Name:  "Gambler",
+		Desc:  "Max LCK, random starting stats",
 		Stats: Stats{STR: 2, DEX: 2, VIT: 2, LCK: 6, Level: 1},
 	},
 }

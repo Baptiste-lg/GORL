@@ -6,7 +6,7 @@ import "math/rand"
 type ShrineType int
 
 const (
-	ShrineBlood  ShrineType = iota // Sacrifice HP for a stat boost
+	ShrineBlood   ShrineType = iota // Sacrifice HP for a stat boost
 	ShrineFortune                   // Gamble: blessing or curse
 	ShrineHealing                   // Full heal (one use)
 )

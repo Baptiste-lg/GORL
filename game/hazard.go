@@ -6,16 +6,16 @@ import "math/rand"
 type HazardType int
 
 const (
-	HazardLava      HazardType = iota
+	HazardLava HazardType = iota
 	HazardPoisonGas
 )
 
 // Hazard is a persistent area-of-effect zone on the map.
 type Hazard struct {
-	X, Y      int
-	Type      HazardType
-	DPS       float64 // damage per second
-	DmgAccum  float64 // accumulated fractional damage
+	X, Y     int
+	Type     HazardType
+	DPS      float64 // damage per second
+	DmgAccum float64 // accumulated fractional damage
 }
 
 // Glyph returns the display character.

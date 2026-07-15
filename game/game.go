@@ -43,8 +43,8 @@ type Game struct {
 	floor         int
 	rng           *rand.Rand
 	killCount     int
-	streak  *KillStreak
-	unlocks *UnlockManager
+	streak        *KillStreak
+	unlocks       *UnlockManager
 
 	// Audio
 	audioEngine *audio.Engine

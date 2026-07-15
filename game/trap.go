@@ -6,7 +6,7 @@ import "math/rand"
 type TrapType int
 
 const (
-	TrapSpike    TrapType = iota
+	TrapSpike TrapType = iota
 	TrapPoison
 	TrapTeleport
 )

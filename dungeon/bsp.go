@@ -21,7 +21,7 @@ func (r Room) CenterY() int { return r.Y + r.H/2 }
 
 // bspNode is a node in the BSP tree.
 type bspNode struct {
-	x, y, w, h int
+	x, y, w, h  int
 	left, right *bspNode
 	room        *Room
 }
