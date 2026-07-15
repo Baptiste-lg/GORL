@@ -2,11 +2,12 @@ package render
 
 // HUDData holds everything the HUD needs to display.
 type HUDData struct {
-	HP, MaxHP     int
-	Level         int
-	XP, XPNext    int
-	Floor         int
-	Effects       []HUDEffect
+	HP, MaxHP  int
+	Level      int
+	XP, XPNext int
+	Floor      int
+	Effects    []HUDEffect
+	Streak     string // kill streak label (empty if none)
 }
 
 // HUDEffect is a status effect shown in the HUD.
@@ -63,10 +64,76 @@ func (r *Renderer) DrawHUD(d HUDData) {
 	r.DrawText(GridCols-len(floorStr)-1, 0, floorStr, "#aaaaaa")
 	r.DrawText(GridCols-len(levelStr)-1, 1, levelStr, "#ffffff")
 
+	// === Kill streak ===
+	if d.Streak != "" {
+		r.DrawText((GridCols-len(d.Streak))/2, 3, d.Streak, "#ff8800")
+	}
+
 	// === Bottom: status effects ===
 	for i, eff := range d.Effects {
 		col := 1 + i*20
 		secs := int(eff.Remaining) + 1
 		r.DrawText(col, GridRows-1, eff.Name+" "+intToStr(secs)+"s", "#44aaff")
+	}
+}
+
+// MiniMapData holds what the mini-map needs.
+type MiniMapData struct {
+	MapW, MapH int
+	PlayerX    int
+	PlayerY    int
+	IsExplored func(x, y int) bool
+	IsWall     func(x, y int) bool
+}
+
+// DrawMiniMap renders a small overview in the bottom-right corner.
+func (r *Renderer) DrawMiniMap(d MiniMapData) {
+	// Mini-map size in cells
+	mmW := d.MapW / 2
+	mmH := d.MapH / 2
+	if mmW > 28 {
+		mmW = 28
+	}
+	if mmH > 12 {
+		mmH = 12
+	}
+
+	// Position: bottom-right corner
+	ox := GridCols - mmW - 1
+	oy := GridRows - mmH - 2
+
+	// Background
+	for dy := 0; dy < mmH; dy++ {
+		for dx := 0; dx < mmW; dx++ {
+			r.FillCell(ox+dx, oy+dy, "#0a0a0a")
+		}
+	}
+
+	// Draw explored tiles
+	scaleX := float64(d.MapW) / float64(mmW)
+	scaleY := float64(d.MapH) / float64(mmH)
+
+	for dy := 0; dy < mmH; dy++ {
+		for dx := 0; dx < mmW; dx++ {
+			wx := int(float64(dx) * scaleX)
+			wy := int(float64(dy) * scaleY)
+
+			if !d.IsExplored(wx, wy) {
+				continue
+			}
+
+			color := "#222222"
+			if d.IsWall(wx, wy) {
+				color = "#444444"
+			}
+			r.FillCell(ox+dx, oy+dy, color)
+		}
+	}
+
+	// Player dot
+	px := int(float64(d.PlayerX) / scaleX)
+	py := int(float64(d.PlayerY) / scaleY)
+	if px >= 0 && px < mmW && py >= 0 && py < mmH {
+		r.FillCell(ox+px, oy+py, "#00ff00")
 	}
 }
