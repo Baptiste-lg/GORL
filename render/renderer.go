@@ -146,3 +146,43 @@ func (r *Renderer) FillRect(x, y, w, h int, color string) {
 func (r *Renderer) FillCell(col, row int, color string) {
 	r.FillRect(col*CellWidth, row*CellHeight, CellWidth, CellHeight, color)
 }
+
+// DrawSprite renders a multi-char sprite at a world tile position.
+// The sprite is drawn within the 3x3 cell block for that tile.
+// worldX/worldY are tile coords; the renderer converts to screen coords using the camera.
+func (r *Renderer) DrawSprite(sprite *Sprite, frame int, worldX, worldY int, color string) {
+	// Convert world tile to viewport tile
+	vx := worldX - r.CamX
+	vy := worldY - r.CamY
+
+	if vx < 0 || vx >= ViewTilesX || vy < 0 || vy >= ViewTilesY {
+		return // off screen
+	}
+
+	// Top-left cell of the 3x3 block
+	baseCol := vx * TileCells
+	baseRow := vy * TileCells
+
+	lines := sprite.Frame(frame)
+	for row, line := range lines {
+		for col, ch := range line {
+			if ch == ' ' {
+				continue
+			}
+			r.DrawChar(baseCol+col, baseRow+row, string(ch), color)
+		}
+	}
+}
+
+// DrawSpriteAt renders a sprite at an absolute screen cell position (not world-relative).
+func (r *Renderer) DrawSpriteAt(sprite *Sprite, frame int, col, row int, color string) {
+	lines := sprite.Frame(frame)
+	for dy, line := range lines {
+		for dx, ch := range line {
+			if ch == ' ' {
+				continue
+			}
+			r.DrawChar(col+dx, row+dy, string(ch), color)
+		}
+	}
+}

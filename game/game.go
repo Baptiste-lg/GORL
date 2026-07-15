@@ -19,6 +19,8 @@ const (
 	StateInventory
 )
 
+const fovRadius = 8
+
 type Game struct {
 	state    State
 	renderer *render.Renderer
@@ -27,8 +29,7 @@ type Game struct {
 
 	dungeonResult *dungeon.GenerateResult
 	fov           *dungeon.FOV
-	playerX       int
-	playerY       int
+	player        *Player
 	floor         int
 }
 
@@ -49,16 +50,21 @@ func (g *Game) startNewGame() {
 	g.state = StatePlaying
 }
 
-const fovRadius = 8
-
 func (g *Game) generateFloor() {
 	seed := time.Now().UnixNano()
 	g.dungeonResult = dungeon.Generate(seed)
 	g.fov = dungeon.NewFOV(dungeon.MapWidth, dungeon.MapHeight)
-	g.playerX = g.dungeonResult.SpawnX
-	g.playerY = g.dungeonResult.SpawnY
-	g.renderer.CenterCamera(g.playerX, g.playerY)
-	g.fov.Compute(g.dungeonResult.Map, g.playerX, g.playerY, fovRadius)
+
+	sx, sy := g.dungeonResult.SpawnX, g.dungeonResult.SpawnY
+	if g.player == nil {
+		g.player = NewPlayer(sx, sy)
+	} else {
+		g.player.X = sx
+		g.player.Y = sy
+	}
+
+	g.renderer.CenterCamera(g.player.X, g.player.Y)
+	g.fov.Compute(g.dungeonResult.Map, g.player.X, g.player.Y, fovRadius)
 }
 
 func (g *Game) registerInput() {
@@ -89,39 +95,46 @@ func (g *Game) handleKeyDown(key string) {
 		if key == "Enter" {
 			g.state = StateMenu
 		}
-	case StatePlaying:
-		dx, dy := 0, 0
-		switch key {
-		case "w", "ArrowUp":
-			dy = -1
-		case "s", "ArrowDown":
-			dy = 1
-		case "a", "ArrowLeft":
-			dx = -1
-		case "d", "ArrowRight":
-			dx = 1
-		}
-		if dx != 0 || dy != 0 {
-			g.tryMove(dx, dy)
-		}
 	}
 }
 
-func (g *Game) tryMove(dx, dy int) {
-	nx, ny := g.playerX+dx, g.playerY+dy
+func (g *Game) processMovement() {
+	if g.player == nil || !g.player.CanMove() {
+		return
+	}
+
+	dx, dy := 0, 0
+	if g.keys["w"] || g.keys["ArrowUp"] {
+		dy = -1
+	} else if g.keys["s"] || g.keys["ArrowDown"] {
+		dy = 1
+	}
+	if g.keys["a"] || g.keys["ArrowLeft"] {
+		dx = -1
+	} else if g.keys["d"] || g.keys["ArrowRight"] {
+		dx = 1
+	}
+
+	if dx == 0 && dy == 0 {
+		return
+	}
+
+	nx, ny := g.player.X+dx, g.player.Y+dy
 	dm := g.dungeonResult.Map
 	if dm.At(nx, ny).Passable() {
-		g.playerX = nx
-		g.playerY = ny
-		g.renderer.CenterCamera(g.playerX, g.playerY)
-		g.fov.Compute(g.dungeonResult.Map, g.playerX, g.playerY, fovRadius)
+		g.player.X = nx
+		g.player.Y = ny
+		g.player.ResetMoveCooldown()
+		g.renderer.CenterCamera(g.player.X, g.player.Y)
+		g.fov.Compute(dm, g.player.X, g.player.Y, fovRadius)
 	}
 }
 
 func (g *Game) Update(dt float64) {
 	switch g.state {
 	case StatePlaying:
-		// Real-time game logic will go here
+		g.player.Update(dt)
+		g.processMovement()
 	}
 }
 
@@ -135,12 +148,11 @@ func (g *Game) Render() {
 		g.renderer.DrawText(22, 25, "Press ENTER to start", "#aaaaaa")
 	case StatePlaying:
 		g.renderer.DrawDungeon(g.dungeonResult.Map, g.fov)
-		// Draw player at center of viewport
-		vcx := render.ViewTilesX / 2
-		vcy := render.ViewTilesY / 2
-		col := vcx*render.TileCells + 1
-		row := vcy*render.TileCells + 1
-		g.renderer.DrawChar(col, row, "@", "#00ff00")
+		// Draw player sprite
+		sprite := render.Sprites[g.player.Sprite]
+		if sprite != nil {
+			g.renderer.DrawSprite(sprite, 0, g.player.X, g.player.Y, sprite.Color)
+		}
 	case StateDead:
 		g.renderer.DrawText(28, 15, "YOU DIED", "#ff0000")
 		g.renderer.DrawText(20, 25, "Press ENTER to restart", "#aaaaaa")
