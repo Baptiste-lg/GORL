@@ -21,6 +21,10 @@ const (
 	EnemyBat
 	EnemySlime
 	EnemyGhost
+	// Bosses
+	EnemyMinotaur
+	EnemyLich
+	EnemyDragon
 )
 
 // EnemyDef defines base stats and properties for an enemy type.
@@ -62,6 +66,42 @@ var EnemyDefs = map[EnemyType]EnemyDef{
 		Stats:  Stats{STR: 3, DEX: 3, VIT: 2, LCK: 3, Level: 3},
 		BaseXP: 35,
 	},
+	EnemyMinotaur: {
+		Type:   EnemyMinotaur,
+		Sprite: "minotaur",
+		Stats:  Stats{STR: 8, DEX: 3, VIT: 12, LCK: 2, Level: 5},
+		BaseXP: 100,
+	},
+	EnemyLich: {
+		Type:   EnemyLich,
+		Sprite: "lich",
+		Stats:  Stats{STR: 10, DEX: 5, VIT: 10, LCK: 5, Level: 8},
+		BaseXP: 200,
+	},
+	EnemyDragon: {
+		Type:   EnemyDragon,
+		Sprite: "dragon",
+		Stats:  Stats{STR: 15, DEX: 4, VIT: 20, LCK: 6, Level: 12},
+		BaseXP: 500,
+	},
+}
+
+// BossForFloor returns the boss type for a given floor, or -1 if not a boss floor.
+func BossForFloor(floor int) EnemyType {
+	switch {
+	case floor%15 == 0:
+		return EnemyDragon
+	case floor%10 == 0:
+		return EnemyLich
+	case floor%5 == 0:
+		return EnemyMinotaur
+	}
+	return -1
+}
+
+// IsBoss returns true if this enemy type is a boss.
+func (e EnemyType) IsBoss() bool {
+	return e == EnemyMinotaur || e == EnemyLich || e == EnemyDragon
 }
 
 // Spawn tables: which enemies can appear at which floor depths.

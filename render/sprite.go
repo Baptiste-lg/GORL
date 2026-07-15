@@ -76,4 +76,28 @@ var Sprites = map[string]*Sprite{
 		Width:  5,
 		Height: 3,
 	},
+	"minotaur": {
+		Frames: [][]string{
+			{"(\\=/)", " |X| ", " / \\ "},
+		},
+		Color:  "#cc4400",
+		Width:  5,
+		Height: 3,
+	},
+	"lich": {
+		Frames: [][]string{
+			{"{@_@}", " |#| ", " /|\\ "},
+		},
+		Color:  "#8800cc",
+		Width:  5,
+		Height: 3,
+	},
+	"dragon": {
+		Frames: [][]string{
+			{"<{O=O}>", " /|=|\\ ", "_/||||\\_"},
+		},
+		Color:  "#ff2200",
+		Width:  7,
+		Height: 3,
+	},
 }
