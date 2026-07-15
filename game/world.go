@@ -12,12 +12,13 @@ type World struct {
 	Enemies []*Enemy
 	Traps   []*Trap
 	Hazards []*Hazard
+	Shrines []*Shrine
 	Floor   int
 }
 
-// NewWorld creates a world with enemies, traps, and hazards.
+// NewWorld creates a world with enemies, traps, hazards, and shrines.
 func NewWorld(dg *dungeon.GenerateResult, floor int, rng *rand.Rand) *World {
-	// Convert dungeon rooms to game rooms for trap/hazard spawning
+	// Convert dungeon rooms to game rooms for trap/hazard/shrine spawning
 	rooms := make([]*Room, len(dg.Rooms))
 	for i, r := range dg.Rooms {
 		rooms[i] = &Room{X: r.X, Y: r.Y, W: r.W, H: r.H}
@@ -28,9 +29,20 @@ func NewWorld(dg *dungeon.GenerateResult, floor int, rng *rand.Rand) *World {
 		Floor:   floor,
 		Traps:   SpawnTraps(rooms, floor, rng),
 		Hazards: SpawnHazards(rooms, floor, rng),
+		Shrines: SpawnShrines(rooms, floor, rng),
 	}
 	w.spawnEnemies(rng)
 	return w
+}
+
+// ShrineAt returns the shrine at (x, y) or nil.
+func (w *World) ShrineAt(x, y int) *Shrine {
+	for _, s := range w.Shrines {
+		if s.X == x && s.Y == y {
+			return s
+		}
+	}
+	return nil
 }
 
 func (w *World) spawnEnemies(rng *rand.Rand) {
