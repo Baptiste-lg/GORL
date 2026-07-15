@@ -1,6 +1,7 @@
 package game
 
 import (
+	"math/rand"
 	"syscall/js"
 	"time"
 
@@ -19,7 +20,11 @@ const (
 	StateInventory
 )
 
-const fovRadius = 8
+const (
+	fovRadius     = 8
+	regenDelay    = 3.0 // seconds after combat before regen starts
+	regenInterval = 5.0 // seconds between regen ticks
+)
 
 type Game struct {
 	state    State
@@ -30,15 +35,21 @@ type Game struct {
 	dungeonResult *dungeon.GenerateResult
 	fov           *dungeon.FOV
 	player        *Player
+	world         *World
+	particles     *render.ParticleSystem
 	floor         int
+	rng           *rand.Rand
+	killCount     int
 }
 
 func New() *Game {
 	g := &Game{
-		state:    StateMenu,
-		renderer: render.NewRenderer(),
-		keys:     make(map[string]bool),
-		floor:    1,
+		state:     StateMenu,
+		renderer:  render.NewRenderer(),
+		keys:      make(map[string]bool),
+		particles: render.NewParticleSystem(),
+		floor:     1,
+		rng:       rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 	g.registerInput()
 	return g
@@ -46,14 +57,18 @@ func New() *Game {
 
 func (g *Game) startNewGame() {
 	g.floor = 1
+	g.killCount = 0
+	g.player = nil
+	g.particles = render.NewParticleSystem()
 	g.generateFloor()
 	g.state = StatePlaying
 }
 
 func (g *Game) generateFloor() {
-	seed := time.Now().UnixNano()
+	seed := g.rng.Int63()
 	g.dungeonResult = dungeon.Generate(seed)
 	g.fov = dungeon.NewFOV(dungeon.MapWidth, dungeon.MapHeight)
+	g.world = NewWorld(g.dungeonResult, g.floor, g.rng)
 
 	sx, sy := g.dungeonResult.SpawnX, g.dungeonResult.SpawnY
 	if g.player == nil {
@@ -121,12 +136,98 @@ func (g *Game) processMovement() {
 
 	nx, ny := g.player.X+dx, g.player.Y+dy
 	dm := g.dungeonResult.Map
-	if dm.At(nx, ny).Passable() {
-		g.player.X = nx
-		g.player.Y = ny
+	if !dm.At(nx, ny).Passable() {
+		return
+	}
+
+	// Attack enemy if one is in the way
+	enemy := g.world.EnemyAt(nx, ny)
+	if enemy != nil {
+		g.playerAttack(enemy)
 		g.player.ResetMoveCooldown()
-		g.renderer.CenterCamera(g.player.X, g.player.Y)
-		g.fov.Compute(dm, g.player.X, g.player.Y, fovRadius)
+		return
+	}
+
+	g.player.X = nx
+	g.player.Y = ny
+	g.player.ResetMoveCooldown()
+	g.renderer.CenterCamera(g.player.X, g.player.Y)
+	g.fov.Compute(dm, g.player.X, g.player.Y, fovRadius)
+}
+
+func (g *Game) playerAttack(enemy *Enemy) {
+	result := ResolveAttack(g.player.Entity, enemy.Entity, g.rng)
+	g.player.LastCombat = 0
+
+	if result.IsDodge {
+		g.particles.SpawnMiss(enemy.X, enemy.Y)
+		return
+	}
+	if result.IsCrit {
+		g.particles.SpawnCrit(enemy.X, enemy.Y, result.Damage)
+	} else {
+		g.particles.SpawnDamage(enemy.X, enemy.Y, result.Damage, "#ffffff")
+	}
+
+	if result.IsDeath {
+		xp := XPForKill(enemy.BaseXP, g.floor)
+		g.player.Stats.XP += xp
+		g.killCount++
+		g.particles.SpawnText(enemy.X, enemy.Y, "+"+itoa(xp)+"xp", "#FFD700")
+	}
+}
+
+func (g *Game) enemyAttackPlayer(enemy *Enemy) {
+	result := ResolveAttack(enemy.Entity, g.player.Entity, g.rng)
+	g.player.LastCombat = 0
+
+	if result.IsDodge {
+		g.particles.SpawnMiss(g.player.X, g.player.Y)
+		return
+	}
+	if result.IsCrit {
+		g.particles.SpawnCrit(g.player.X, g.player.Y, result.Damage)
+	} else {
+		g.particles.SpawnDamage(g.player.X, g.player.Y, result.Damage, "#ff4444")
+	}
+
+	if result.IsDeath {
+		g.state = StateDead
+	}
+}
+
+func (g *Game) processEnemyCombat() {
+	for _, e := range g.world.Enemies {
+		if !e.IsAlive {
+			continue
+		}
+		// Enemy attacks if adjacent to player
+		dx := e.X - g.player.X
+		dy := e.Y - g.player.Y
+		if dx < 0 {
+			dx = -dx
+		}
+		if dy < 0 {
+			dy = -dy
+		}
+		if dx <= 1 && dy <= 1 && (dx+dy) == 1 && e.ActionTimer <= 0 {
+			g.enemyAttackPlayer(e)
+			e.ActionTimer = e.Stats.MoveCooldownMS() / 1000.0
+		}
+	}
+}
+
+func (g *Game) processRegen(dt float64) {
+	if g.player.LastCombat < regenDelay {
+		return
+	}
+	g.player.RegenTimer += dt
+	if g.player.RegenTimer >= regenInterval {
+		g.player.RegenTimer -= regenInterval
+		healed := g.player.Heal(1)
+		if healed > 0 {
+			g.particles.SpawnText(g.player.X, g.player.Y, "+1", "#44ff44")
+		}
 	}
 }
 
@@ -135,6 +236,11 @@ func (g *Game) Update(dt float64) {
 	case StatePlaying:
 		g.player.Update(dt)
 		g.processMovement()
+		g.world.UpdateEnemies(dt, g.player.X, g.player.Y)
+		g.processEnemyCombat()
+		g.world.RemoveDead()
+		g.processRegen(dt)
+		g.particles.Update(dt)
 	}
 }
 
@@ -148,13 +254,29 @@ func (g *Game) Render() {
 		g.renderer.DrawText(22, 25, "Press ENTER to start", "#aaaaaa")
 	case StatePlaying:
 		g.renderer.DrawDungeon(g.dungeonResult.Map, g.fov)
+
+		// Draw enemies (only if visible)
+		for _, e := range g.world.Enemies {
+			if !e.IsAlive || !g.fov.IsVisible(e.X, e.Y) {
+				continue
+			}
+			sprite := render.Sprites[e.Sprite]
+			if sprite != nil {
+				g.renderer.DrawSprite(sprite, 0, e.X, e.Y, sprite.Color)
+			}
+		}
+
 		// Draw player sprite
 		sprite := render.Sprites[g.player.Sprite]
 		if sprite != nil {
 			g.renderer.DrawSprite(sprite, 0, g.player.X, g.player.Y, sprite.Color)
 		}
+
+		// Draw particles
+		g.particles.Draw(g.renderer)
 	case StateDead:
 		g.renderer.DrawText(28, 15, "YOU DIED", "#ff0000")
+		g.renderer.DrawText(22, 18, "Floor: "+itoa(g.floor)+"  Kills: "+itoa(g.killCount), "#aaaaaa")
 		g.renderer.DrawText(20, 25, "Press ENTER to restart", "#aaaaaa")
 	}
 }
@@ -177,4 +299,28 @@ func (g *Game) Run() {
 		return nil
 	})
 	js.Global().Call("requestAnimationFrame", frame)
+}
+
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	neg := false
+	if n < 0 {
+		neg = true
+		n = -n
+	}
+	buf := make([]byte, 0, 10)
+	for n > 0 {
+		buf = append(buf, byte('0'+n%10))
+		n /= 10
+	}
+	if neg {
+		buf = append(buf, '-')
+	}
+	// reverse
+	for i, j := 0, len(buf)-1; i < j; i, j = i+1, j-1 {
+		buf[i], buf[j] = buf[j], buf[i]
+	}
+	return string(buf)
 }
