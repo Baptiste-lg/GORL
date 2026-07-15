@@ -10,14 +10,24 @@ import (
 type World struct {
 	Dungeon *dungeon.GenerateResult
 	Enemies []*Enemy
+	Traps   []*Trap
+	Hazards []*Hazard
 	Floor   int
 }
 
-// NewWorld creates a world with enemies spawned in rooms.
+// NewWorld creates a world with enemies, traps, and hazards.
 func NewWorld(dg *dungeon.GenerateResult, floor int, rng *rand.Rand) *World {
+	// Convert dungeon rooms to game rooms for trap/hazard spawning
+	rooms := make([]*Room, len(dg.Rooms))
+	for i, r := range dg.Rooms {
+		rooms[i] = &Room{X: r.X, Y: r.Y, W: r.W, H: r.H}
+	}
+
 	w := &World{
 		Dungeon: dg,
 		Floor:   floor,
+		Traps:   SpawnTraps(rooms, floor, rng),
+		Hazards: SpawnHazards(rooms, floor, rng),
 	}
 	w.spawnEnemies(rng)
 	return w
@@ -28,24 +38,21 @@ func (w *World) spawnEnemies(rng *rand.Rand) {
 	bossType := BossForFloor(w.Floor)
 	if bossType >= 0 {
 		def := EnemyDefs[bossType]
-		// Place boss near the stairs
 		bx := w.Dungeon.StairsX + 1
 		by := w.Dungeon.StairsY
 		if !w.Dungeon.Map.At(bx, by).Passable() {
 			bx = w.Dungeon.StairsX - 1
 		}
 		boss := NewEnemy(def, bx, by, w.Floor)
-		boss.AI = AIChase // bosses are always aggressive
+		boss.AI = AIChase
 		w.Enemies = append(w.Enemies, boss)
 	}
 
 	for i, room := range w.Dungeon.Rooms {
-		// Skip the player's spawn room
 		if i == 0 {
 			continue
 		}
 
-		// 1-3 enemies per room, scaling with floor
 		count := 1 + rng.Intn(3)
 		if w.Floor >= 5 {
 			count += 1
@@ -58,17 +65,14 @@ func (w *World) spawnEnemies(rng *rand.Rand) {
 			eType := PickEnemyType(w.Floor, rng)
 			def := EnemyDefs[eType]
 
-			// Random position within the room
 			x := room.X + 1 + rng.Intn(max(1, room.W-2))
 			y := room.Y + 1 + rng.Intn(max(1, room.H-2))
 
-			// Don't spawn on stairs
 			tile := w.Dungeon.Map.At(x, y)
 			if tile == dungeon.TileStairsDown || tile == dungeon.TileStairsUp {
 				continue
 			}
 
-			// Don't stack enemies
 			occupied := false
 			for _, e := range w.Enemies {
 				if e.X == x && e.Y == y {
@@ -95,7 +99,6 @@ func (w *World) UpdateEnemies(dt float64, playerX, playerY int) {
 			if !w.Dungeon.Map.At(x, y).Passable() {
 				return false
 			}
-			// Don't walk into other enemies
 			for _, other := range w.Enemies {
 				if other != e && other.IsAlive && other.X == x && other.Y == y {
 					return false
@@ -104,6 +107,27 @@ func (w *World) UpdateEnemies(dt float64, playerX, playerY int) {
 			return true
 		})
 	}
+}
+
+// TrapAt returns the trap at (x, y) or nil.
+func (w *World) TrapAt(x, y int) *Trap {
+	for _, t := range w.Traps {
+		if t.X == x && t.Y == y && !t.Triggered {
+			return t
+		}
+	}
+	return nil
+}
+
+// HazardsAt returns all hazards at (x, y).
+func (w *World) HazardsAt(x, y int) []*Hazard {
+	var result []*Hazard
+	for _, h := range w.Hazards {
+		if h.X == x && h.Y == y {
+			result = append(result, h)
+		}
+	}
+	return result
 }
 
 // EnemyAt returns the enemy at (x, y) or nil.
