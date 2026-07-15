@@ -72,9 +72,82 @@ jobs:
       - name: Verify WASM compilation
         run: GOOS=js GOARCH=wasm go build -o /dev/null .
 
+      - name: Check WASM binary size
+        run: |
+          GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o /tmp/gorl.wasm .
+          size=$(stat -c%s /tmp/gorl.wasm)
+          echo "WASM binary size: $(( size / 1024 / 1024 ))MB ($(( size / 1024 ))KB)"
+          # Warn if binary exceeds 20MB
+          if [ "$size" -gt 20971520 ]; then
+            echo "::warning::WASM binary is over 20MB, consider optimizing"
+          fi
+
+      - name: Check for TODO/FIXME
+        run: |
+          count=$(grep -rn "TODO\|FIXME\|HACK\|XXX" --include="*.go" . | wc -l)
+          if [ "$count" -gt 0 ]; then
+            echo "::notice::Found $count TODO/FIXME comments:"
+            grep -rn "TODO\|FIXME\|HACK\|XXX" --include="*.go" . || true
+          fi
+
+      - name: Check for dead code (unused exports)
+        run: |
+          GOOS=js GOARCH=wasm go build -gcflags="-e" ./... 2>&1 || true
+
+  security:
+    name: Security & Dependencies
+    needs: autoformat
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Check go.mod tidiness
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum 2>/dev/null || echo "::warning::go.mod is not tidy, run 'go mod tidy'"
+
+      - name: Check for known vulnerabilities
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          GOOS=js GOARCH=wasm govulncheck ./... || true
+
+      - name: Verify no secrets in source
+        run: |
+          # Check for common secret patterns
+          if grep -rn "API_KEY\|SECRET\|PASSWORD\|TOKEN" --include="*.go" . | grep -v "_test.go" | grep -v "// "; then
+            echo "::warning::Potential secrets found in source code"
+          else
+            echo "No secrets detected"
+          fi
+
+  build-docker:
+    name: Verify Docker Build
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t gorl:ci .
+
+      - name: Verify container starts
+        run: |
+          docker run -d --name gorl-test -p 8080:8080 gorl:ci
+          sleep 3
+          curl -f http://localhost:8080/ || (docker logs gorl-test && exit 1)
+          docker stop gorl-test
+
   deploy:
     name: Build & Deploy to GitHub Pages
-    needs: quality
+    needs: [quality, security]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
     runs-on: ubuntu-latest
     permissions:
@@ -105,7 +178,6 @@ jobs:
 
       - name: Copy wasm_exec.js
         run: |
-          # Go >=1.24 moved to lib/wasm, older versions use misc/wasm
           if [ -f "$(go env GOROOT)/misc/wasm/wasm_exec.js" ]; then
             cp "$(go env GOROOT)/misc/wasm/wasm_exec.js" web/
           elif [ -f "$(go env GOROOT)/lib/wasm/wasm_exec.js" ]; then
@@ -115,6 +187,18 @@ jobs:
             find "$(go env GOROOT)" -name "wasm_exec.js" || true
             exit 1
           fi
+
+      - name: Report build artifacts
+        run: |
+          echo "### Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| File | Size |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|------|" >> $GITHUB_STEP_SUMMARY
+          for f in web/*.wasm web/*.js web/*.html web/*.css; do
+            if [ -f "$f" ]; then
+              size=$(stat -c%s "$f")
+              echo "| $(basename $f) | $(( size / 1024 ))KB |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
