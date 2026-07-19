@@ -120,11 +120,6 @@ func sinApprox(x float64) float64 {
 	return x * (1.27 - 0.405*x)
 }
 
-// DrawDungeon renders the visible portion of the dungeon map with FOV.
-func (r *Renderer) DrawDungeon(dm *dungeon.DungeonMap, fov *dungeon.FOV) {
-	r.DrawDungeonThemed(dm, fov, dungeon.ThemeStone)
-}
-
 // DrawDungeonThemed renders the dungeon with a specific color theme.
 func (r *Renderer) DrawDungeonThemed(dm *dungeon.DungeonMap, fov *dungeon.FOV, theme dungeon.Theme) {
 	for vy := 0; vy < ViewTilesY; vy++ {
@@ -238,15 +233,3 @@ func (r *Renderer) DrawSprite(sprite *Sprite, frame int, worldX, worldY int, col
 	}
 }
 
-// DrawSpriteAt renders a sprite at an absolute screen cell position (not world-relative).
-func (r *Renderer) DrawSpriteAt(sprite *Sprite, frame int, col, row int, color string) {
-	lines := sprite.Frame(frame)
-	for dy, line := range lines {
-		for dx, ch := range line {
-			if ch == ' ' {
-				continue
-			}
-			r.DrawChar(col+dx, row+dy, string(ch), color)
-		}
-	}
-}
