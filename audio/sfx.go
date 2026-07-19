@@ -42,13 +42,6 @@ func (s *SFX) LevelUp() {
 	s.engine.PlayTone(1047, t+0.45, 0.30, "square", 0.10)
 }
 
-// DoorOpen plays a low descending creak.
-func (s *SFX) DoorOpen() {
-	t := s.engine.CurrentTime()
-	s.engine.PlayTone(180, t, 0.15, "sawtooth", 0.05)
-	s.engine.PlayTone(120, t+0.1, 0.15, "sawtooth", 0.04)
-}
-
 // Footstep plays a very quiet click.
 func (s *SFX) Footstep() {
 	t := s.engine.CurrentTime()
