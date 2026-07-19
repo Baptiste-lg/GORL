@@ -52,11 +52,9 @@ func NewWorld(dg *dungeon.GenerateResult, floor int, rng *rand.Rand) *World {
 	}
 	w.RoomRoles[stairsIdx] = RoleStairs
 
-	// Mark secret room early (last room, added by generator on floor >= 2)
-	secretIdx := -1
-	lastIdx := len(rooms) - 1
-	if floor >= 2 && lastIdx > stairsIdx && lastIdx > 0 {
-		secretIdx = lastIdx
+	// Mark secret room if generator placed one
+	secretIdx := dg.SecretRoomIdx
+	if secretIdx >= 0 && secretIdx < len(rooms) {
 		w.RoomRoles[secretIdx] = RoleSecret
 		r := rooms[secretIdx]
 		secretLoot := GenerateLoot(rng, floor+5)
