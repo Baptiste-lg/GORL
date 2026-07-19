@@ -249,8 +249,9 @@ func (g *Game) handleLevelUpKey(key string) {
 		if g.levelUpSelected >= 0 && g.levelUpSelected < len(g.levelChoices) {
 			choice := g.levelChoices[g.levelUpSelected]
 			choice.Apply(&g.player.Stats)
+			xpNeeded := g.player.Stats.XPToNextLevel()
 			g.player.Stats.Level++
-			g.player.Stats.XP -= g.player.Stats.XPToNextLevel()
+			g.player.Stats.XP -= xpNeeded
 			if g.player.Stats.XP < 0 {
 				g.player.Stats.XP = 0
 			}
@@ -813,7 +814,7 @@ func (g *Game) renderDeath() {
 	g.renderer.DrawText(20, 21, "Level: "+itoa(g.player.Stats.Level), "#aaaaaa")
 	g.renderer.DrawText(20, 22, "Kills: "+itoa(g.killCount), "#aaaaaa")
 	if g.streak.Count > 2 {
-		g.renderer.DrawText(20, 23, "Best Streak: "+itoa(g.killCount), "#ff8800")
+		g.renderer.DrawText(20, 23, "Best Streak: "+itoa(g.streak.Count), "#ff8800")
 	}
 	g.renderer.DrawText(18, 26, "Press ENTER to restart", "#aaaaaa")
 }
@@ -870,6 +871,7 @@ func (g *Game) Run() {
 				js.Global().Get("console").Call("error", "GORL panic recovered: "+msg)
 				g.state = StateMenu
 				g.player = nil
+				js.Global().Call("requestAnimationFrame", frame)
 			}
 		}()
 
