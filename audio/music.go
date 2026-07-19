@@ -18,7 +18,6 @@ type Scale struct {
 
 var (
 	MinorPentatonic = Scale{Notes: []string{"A", "C", "D", "E", "G"}}
-	MajorScale      = Scale{Notes: []string{"C", "D", "E", "F", "G", "A", "B"}}
 	Dissonant       = Scale{Notes: []string{"A", "A#", "C", "D#", "E", "G#"}}
 )
 
@@ -122,7 +121,7 @@ func (m *MusicEngine) scheduleBeat(t, dur float64) {
 	}
 
 	// --- Bass: root note on beats 0, 4, 8, 12 ---
-	if step%4 == 0 {
+	if step%4 == 0 && len(m.scale.Notes) > 0 {
 		bassNote := m.scale.Notes[0]
 		freq := NoteFreq(bassNote, m.bassOctave)
 		vol := 0.10
