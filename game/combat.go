@@ -4,11 +4,10 @@ import "math/rand"
 
 // CombatResult holds the outcome of a single attack.
 type CombatResult struct {
-	Damage   int
-	IsCrit   bool
-	IsDodge  bool
-	IsDeath  bool
-	XPGained int
+	Damage  int
+	IsCrit  bool
+	IsDodge bool
+	IsDeath bool
 }
 
 // ResolveAttack calculates damage from attacker to defender.
