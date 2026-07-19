@@ -48,13 +48,6 @@ func (r Rarity) Name() string {
 	}
 }
 
-// PotionKind identifies potion subtypes.
-type PotionKind int
-
-const (
-	PotionHealth PotionKind = iota
-)
-
 // ScrollKind identifies scroll subtypes.
 type ScrollKind int
 
@@ -72,7 +65,6 @@ type Item struct {
 	BonusDEX   int
 	BonusVIT   int
 	BonusLCK   int
-	PotionKind PotionKind
 	ScrollKind ScrollKind
 	// World position (0,0 if in inventory)
 	X, Y int
@@ -188,10 +180,9 @@ func GeneratePotion(rng *rand.Rand, floor int) *Item {
 		name = "Supreme Health Potion"
 	}
 	return &Item{
-		Name:       name,
-		Type:       ItemPotion,
-		Rarity:     rarity,
-		PotionKind: PotionHealth,
+		Name:   name,
+		Type:   ItemPotion,
+		Rarity: rarity,
 	}
 }
 
