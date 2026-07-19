@@ -5,8 +5,6 @@ package render
 type Sprite struct {
 	Frames [][]string
 	Color  string
-	Width  int // number of characters wide
-	Height int // number of lines tall
 }
 
 // Frame returns the frame at index (wraps around).
@@ -54,83 +52,57 @@ var Sprites = map[string]*Sprite{
 			{" O ", "/|\\", "/ \\"}, // idle
 			{" O ", "/|\\", "| |"},  // walk
 		},
-		Color:  "#00ff00",
-		Width:  3,
-		Height: 3,
+		Color: "#00ff00",
 	},
 	"rat": {
 		Frames: [][]string{
 			{"   ", "o--", " ''"},
 		},
-		Color:  "#8B4513",
-		Width:  3,
-		Height: 3,
+		Color: "#8B4513",
 	},
 	"skeleton": {
 		Frames: [][]string{
 			{"._.", "/X\\", "| |"},
 			{"._.", "/X\\", "/ \\"},
 		},
-		Color:  "#cccccc",
-		Width:  3,
-		Height: 3,
+		Color: "#cccccc",
 	},
 	"bat": {
 		Frames: [][]string{
 			{"/V\\", "\\_/", "   "},
 			{"/v\\", "/ \\", "   "},
 		},
-		Color:  "#9966cc",
-		Width:  3,
-		Height: 3,
+		Color: "#9966cc",
 	},
 	"slime": {
 		Frames: [][]string{
 			{"___", "(o_o)", "~~~"},
 		},
-		Color:  "#33cc33",
-		Width:  3,
-		Height: 3,
+		Color: "#33cc33",
 	},
 	"ghost": {
 		Frames: [][]string{
 			{"___", "(O.O)", "^^^"},
 			{"___", "(o.o)", "^^^"},
 		},
-		Color:  "#aaaaff",
-		Width:  3,
-		Height: 3,
-	},
-	"chest": {
-		Frames: [][]string{
-			{"[===]", "|___|", "     "},
-		},
-		Color:  "#FFD700",
-		Width:  5,
-		Height: 3,
+		Color: "#aaaaff",
 	},
 	"minotaur": {
 		Frames: [][]string{
 			{"(\\=/)", " |X| ", " / \\ "},
 		},
-		Color:  "#cc4400",
-		Width:  5,
-		Height: 3,
+		Color: "#cc4400",
 	},
 	"lich": {
 		Frames: [][]string{
 			{"{@_@}", " |#| ", " /|\\ "},
 		},
-		Color:  "#8800cc",
-		Width:  5,
-		Height: 3,
+		Color: "#8800cc",
 	},
 	"dragon": {
 		Frames: [][]string{
 			{"<{O=O}>", " /|=|\\ ", "_/||||\\_"},
 		},
-		Color:  "#ff2200",
-		Width:  7,
-		Height: 3,
+		Color: "#ff2200",
 	},
 }
