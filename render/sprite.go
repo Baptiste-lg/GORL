@@ -11,6 +11,9 @@ type Sprite struct {
 
 // Frame returns the frame at index (wraps around).
 func (s *Sprite) Frame(idx int) []string {
+	if len(s.Frames) == 0 {
+		return nil
+	}
 	return s.Frames[idx%len(s.Frames)]
 }
 
