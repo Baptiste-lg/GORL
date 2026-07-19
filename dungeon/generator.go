@@ -12,12 +12,13 @@ const (
 
 // GenerateResult holds the output of dungeon generation.
 type GenerateResult struct {
-	Map     *DungeonMap
-	Rooms   []*Room
-	SpawnX  int
-	SpawnY  int
-	StairsX int
-	StairsY int
+	Map           *DungeonMap
+	Rooms         []*Room
+	SpawnX        int
+	SpawnY        int
+	StairsX       int
+	StairsY       int
+	SecretRoomIdx int // index of secret room in Rooms, or -1 if none
 }
 
 // Generate creates a new dungeon floor.
@@ -68,17 +69,20 @@ func Generate(seed int64) *GenerateResult {
 	dm.Set(spawnX, spawnY, TileStairsUp)
 
 	// Attempt to place a secret room (disconnected, accessible via cracked wall)
+	secretIdx := -1
 	if secretRoom := placeSecretRoom(dm, rooms, rng); secretRoom != nil {
+		secretIdx = len(rooms)
 		rooms = append(rooms, secretRoom)
 	}
 
 	return &GenerateResult{
-		Map:     dm,
-		Rooms:   rooms,
-		SpawnX:  spawnX,
-		SpawnY:  spawnY,
-		StairsX: stairsX,
-		StairsY: stairsY,
+		Map:           dm,
+		Rooms:         rooms,
+		SpawnX:        spawnX,
+		SpawnY:        spawnY,
+		StairsX:       stairsX,
+		StairsY:       stairsY,
+		SecretRoomIdx: secretIdx,
 	}
 }
 
