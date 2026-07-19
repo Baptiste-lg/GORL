@@ -162,14 +162,16 @@ func (m *MusicEngine) scheduleBeat(t, dur float64) {
 
 func (m *MusicEngine) pickNote() string {
 	notes := m.scale.Notes
+	if len(notes) == 0 {
+		return "A"
+	}
+
 	// Weight toward root and fifth
 	weights := make([]int, len(notes))
 	for i := range weights {
 		weights[i] = 1
 	}
-	if len(weights) > 0 {
-		weights[0] = 3 // root
-	}
+	weights[0] = 3 // root
 	if len(weights) > 3 {
 		weights[3] = 2 // ~fifth
 	}
@@ -177,6 +179,9 @@ func (m *MusicEngine) pickNote() string {
 	total := 0
 	for _, w := range weights {
 		total += w
+	}
+	if total == 0 {
+		return notes[0]
 	}
 	roll := m.rng.Intn(total)
 	for i, w := range weights {
