@@ -153,16 +153,12 @@ func (w *World) EnemyAt(x, y int) *Enemy {
 }
 
 // RemoveDead filters out dead enemies.
-func (w *World) RemoveDead() []*Enemy {
-	var dead []*Enemy
+func (w *World) RemoveDead() {
 	alive := w.Enemies[:0]
 	for _, e := range w.Enemies {
 		if e.IsAlive {
 			alive = append(alive, e)
-		} else {
-			dead = append(dead, e)
 		}
 	}
 	w.Enemies = alive
-	return dead
 }
