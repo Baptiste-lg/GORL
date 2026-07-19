@@ -128,10 +128,11 @@ type Enemy struct {
 	PatrolDY    int
 	PatrolSteps int
 	BaseXP      int
+	rng         *rand.Rand
 }
 
 // NewEnemy creates an enemy from a definition, scaled to the given floor.
-func NewEnemy(def EnemyDef, x, y, floor int) *Enemy {
+func NewEnemy(def EnemyDef, x, y, floor int, rng *rand.Rand) *Enemy {
 	stats := def.Stats
 	stats.Level = def.Stats.Level + floor/3
 
@@ -155,6 +156,7 @@ func NewEnemy(def EnemyDef, x, y, floor int) *Enemy {
 		AI:          AIPatrol,
 		ActionTimer: 0,
 		BaseXP:      def.BaseXP,
+		rng:         rng,
 	}
 }
 
@@ -217,10 +219,10 @@ func (e *Enemy) updatePatrol(playerX, playerY int, passable func(x, y int) bool)
 	// Wander randomly
 	if e.PatrolSteps <= 0 {
 		dirs := [][2]int{{0, -1}, {0, 1}, {-1, 0}, {1, 0}}
-		d := dirs[rand.Intn(len(dirs))]
+		d := dirs[e.rng.Intn(len(dirs))]
 		e.PatrolDX = d[0]
 		e.PatrolDY = d[1]
-		e.PatrolSteps = 2 + rand.Intn(4)
+		e.PatrolSteps = 2 + e.rng.Intn(4)
 	}
 
 	nx, ny := e.X+e.PatrolDX, e.Y+e.PatrolDY
