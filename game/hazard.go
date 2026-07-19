@@ -67,8 +67,8 @@ func SpawnHazards(rooms []*Room, floor int, rng *rand.Rand) []*Hazard {
 		}
 
 		// Place a small cluster (2-4 tiles)
-		cx := room.X + 1 + rng.Intn(maxInt(1, room.W-2))
-		cy := room.Y + 1 + rng.Intn(maxInt(1, room.H-2))
+		cx := room.X + 1 + rng.Intn(max(1, room.W-2))
+		cy := room.Y + 1 + rng.Intn(max(1, room.H-2))
 		clusterSize := 2 + rng.Intn(3)
 
 		for k := 0; k < clusterSize; k++ {
