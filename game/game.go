@@ -110,7 +110,7 @@ func (g *Game) generateFloor() {
 	g.dungeonResult = dungeon.Generate(seed)
 	g.fov = dungeon.NewFOV(dungeon.MapWidth, dungeon.MapHeight)
 	g.world = NewWorld(g.dungeonResult, g.floor, g.rng)
-	g.groundItems = nil
+	g.groundItems = g.world.GroundItems // treasure/secret room items
 
 	sx, sy := g.dungeonResult.SpawnX, g.dungeonResult.SpawnY
 	if g.player == nil {
@@ -648,6 +648,7 @@ func (g *Game) Update(dt float64) {
 		g.world.UpdateEnemies(dt, g.player.X, g.player.Y)
 		g.processEnemyCombat()
 		g.world.RemoveDead()
+		g.checkChallengeCleared()
 		g.processHazards(dt)
 		g.processRegen(dt)
 		g.streak.Update(dt)
