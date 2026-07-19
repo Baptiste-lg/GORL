@@ -281,6 +281,24 @@ func (g *Game) checkLevelUp() {
 	}
 }
 
+func (g *Game) checkChallengeCleared() {
+	if g.world.ChallengeCleared || g.world.ChallengeRoom < 0 {
+		return
+	}
+	if g.world.EnemiesInRoom(g.world.ChallengeRoom) == 0 {
+		g.world.ChallengeCleared = true
+		r := g.world.Dungeon.Rooms[g.world.ChallengeRoom]
+		cx, cy := r.CenterX(), r.CenterY()
+		// Spawn rare+ reward
+		loot := GenerateLoot(g.rng, g.floor+5)
+		loot.X = cx
+		loot.Y = cy
+		g.groundItems = append(g.groundItems, loot)
+		g.particles.SpawnText(cx, cy, "CHALLENGE CLEARED!", "#FFD700")
+		g.sfx.LevelUp()
+	}
+}
+
 func (g *Game) interact() {
 	// Check shop first
 	if s := g.world.Shop; s != nil && s.X == g.player.X && s.Y == g.player.Y {
@@ -710,6 +728,7 @@ func (g *Game) Render() {
 				t := g.dungeonResult.Map.At(x, y)
 				return t == dungeon.TileWall || t == dungeon.TileCrackedWall
 			},
+			Markers: g.buildMiniMapMarkers(),
 		})
 
 		// Overlays
@@ -785,6 +804,21 @@ func (g *Game) renderGameWorld() {
 			col := vx*render.TileCells + 1
 			row := vy*render.TileCells + 1
 			g.renderer.DrawChar(col, row, "S", "#FFD700")
+		}
+	}
+
+	// Challenge room marker (! until cleared)
+	if ci := g.world.ChallengeRoom; ci >= 0 && !g.world.ChallengeCleared {
+		r := g.world.Dungeon.Rooms[ci]
+		cx, cy := r.CenterX(), r.CenterY()
+		if g.fov.IsVisible(cx, cy) {
+			vx := cx - g.renderer.CamX
+			vy := cy - g.renderer.CamY
+			if vx >= 0 && vx < render.ViewTilesX && vy >= 0 && vy < render.ViewTilesY {
+				col := vx*render.TileCells + 1
+				row := vy*render.TileCells + 1
+				g.renderer.DrawChar(col, row, "!", "#ff4444")
+			}
 		}
 	}
 
@@ -935,6 +969,35 @@ func (g *Game) buildShopData() render.ShopData {
 		data.Items = append(data.Items, si)
 	}
 	return data
+}
+
+func (g *Game) buildMiniMapMarkers() []render.MiniMapMarker {
+	var markers []render.MiniMapMarker
+	for idx, role := range g.world.RoomRoles {
+		if idx >= len(g.world.Dungeon.Rooms) {
+			continue
+		}
+		r := g.world.Dungeon.Rooms[idx]
+		var color string
+		switch role {
+		case RoleShop:
+			color = "#44ff44"
+		case RoleTreasure:
+			color = "#FFD700"
+		case RoleChallenge:
+			if g.world.ChallengeCleared {
+				color = "#444444"
+			} else {
+				color = "#ff4444"
+			}
+		default:
+			continue
+		}
+		markers = append(markers, render.MiniMapMarker{
+			X: r.CenterX(), Y: r.CenterY(), Color: color,
+		})
+	}
+	return markers
 }
 
 // Run starts the game loop using requestAnimationFrame.
