@@ -59,15 +59,6 @@ func (f *FOV) IsExplored(x, y int) bool {
 	return f.Explored[y][x]
 }
 
-// ResetExplored clears all explored state (for new floors).
-func (f *FOV) ResetExplored() {
-	for y := 0; y < f.Height; y++ {
-		for x := 0; x < f.Width; x++ {
-			f.Explored[y][x] = false
-		}
-	}
-}
-
 // octant multipliers for transforming coordinates
 var octantDX = [8][2]int{
 	{1, 0}, {0, 1}, {0, -1}, {1, 0},
