@@ -34,9 +34,9 @@ func (n *bspNode) split(rng *rand.Rand) bool {
 
 	// Decide split direction: prefer splitting the longer axis
 	splitH := rng.Intn(2) == 0
-	if float64(n.w)/float64(n.h) >= 1.25 {
+	if n.h > 0 && float64(n.w)/float64(n.h) >= 1.25 {
 		splitH = false // wide → split vertically
-	} else if float64(n.h)/float64(n.w) >= 1.25 {
+	} else if n.w > 0 && float64(n.h)/float64(n.w) >= 1.25 {
 		splitH = true // tall → split horizontally
 	}
 
