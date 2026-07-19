@@ -109,7 +109,7 @@ func useShrineBlood(p *Player, rng *rand.Rand) ShrineResult {
 	}
 
 	return ShrineResult{
-		Message: "-" + intStr(cost) + " HP, +2 " + stats[pick],
+		Message: "-" + itoa(cost) + " HP, +2 " + stats[pick],
 		Color:   "#cc2222",
 	}
 }
@@ -172,7 +172,7 @@ func useShrineHealing(p *Player) ShrineResult {
 	healed := maxHP - p.Stats.HP
 	p.Stats.HP = maxHP
 	return ShrineResult{
-		Message: "Healed +" + intStr(healed) + " HP",
+		Message: "Healed +" + itoa(healed) + " HP",
 		Color:   "#22cc22",
 	}
 }
@@ -203,24 +203,3 @@ func SpawnShrines(rooms []*Room, floor int, rng *rand.Rand) []*Shrine {
 	return shrines
 }
 
-func intStr(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	buf := make([]byte, 0, 5)
-	neg := n < 0
-	if neg {
-		n = -n
-	}
-	for n > 0 {
-		buf = append(buf, byte('0'+n%10))
-		n /= 10
-	}
-	if neg {
-		buf = append(buf, '-')
-	}
-	for i, j := 0, len(buf)-1; i < j; i, j = i+1, j-1 {
-		buf[i], buf[j] = buf[j], buf[i]
-	}
-	return string(buf)
-}
