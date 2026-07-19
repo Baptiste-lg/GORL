@@ -13,6 +13,7 @@ type World struct {
 	Traps   []*Trap
 	Hazards []*Hazard
 	Shrines []*Shrine
+	Shop    *Shop
 	Floor   int
 }
 
@@ -31,6 +32,15 @@ func NewWorld(dg *dungeon.GenerateResult, floor int, rng *rand.Rand) *World {
 		Hazards: SpawnHazards(rooms, floor, rng),
 		Shrines: SpawnShrines(rooms, floor, rng),
 	}
+
+	// Spawn shop on non-boss floors, if enough rooms exist
+	if floor%5 != 0 && len(rooms) >= 3 {
+		// Pick a room that isn't spawn (0) or the last room (stairs)
+		shopIdx := 1 + rng.Intn(len(rooms)-2)
+		r := rooms[shopIdx]
+		w.Shop = NewShop(r.X+r.W/2, r.Y+r.H/2, floor, rng)
+	}
+
 	w.spawnEnemies(rng)
 	return w
 }
