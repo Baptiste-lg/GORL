@@ -62,8 +62,8 @@ func SpawnTraps(rooms []*Room, floor int, rng *rand.Rand) []*Trap {
 		}
 
 		for j := 0; j < count; j++ {
-			x := room.X + 1 + rng.Intn(maxInt(1, room.W-2))
-			y := room.Y + 1 + rng.Intn(maxInt(1, room.H-2))
+			x := room.X + 1 + rng.Intn(max(1, room.W-2))
+			y := room.Y + 1 + rng.Intn(max(1, room.H-2))
 
 			trapType := TrapType(rng.Intn(3))
 			traps = append(traps, &Trap{
@@ -83,9 +83,3 @@ type Room struct {
 	X, Y, W, H int
 }
 
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
