@@ -6,6 +6,7 @@ type HUDData struct {
 	Level      int
 	XP, XPNext int
 	Floor      int
+	Gold       int
 	Effects    []HUDEffect
 	Streak     string // kill streak label (empty if none)
 }
@@ -58,11 +59,13 @@ func (r *Renderer) DrawHUD(d HUDData) {
 	r.DrawText(4, 1, xpBar, "#FFD700")
 	r.DrawText(26, 1, intToStr(d.XP)+"/"+intToStr(d.XPNext), "#ccaa00")
 
-	// === Top-right: Floor and Level ===
+	// === Top-right: Floor, Level, Gold ===
 	floorStr := "Floor " + intToStr(d.Floor)
 	levelStr := "Lv." + intToStr(d.Level)
+	goldStr := "$" + intToStr(d.Gold)
 	r.DrawText(GridCols-len(floorStr)-1, 0, floorStr, "#aaaaaa")
 	r.DrawText(GridCols-len(levelStr)-1, 1, levelStr, "#ffffff")
+	r.DrawText(GridCols-len(goldStr)-1, 2, goldStr, "#FFD700")
 
 	// === Kill streak ===
 	if d.Streak != "" {
