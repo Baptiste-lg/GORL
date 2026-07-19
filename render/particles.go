@@ -1,6 +1,5 @@
 package render
 
-import "strconv"
 
 // Particle is a floating text effect (damage numbers, MISS, etc).
 type Particle struct {
@@ -27,7 +26,7 @@ func (ps *ParticleSystem) SpawnDamage(x, y, amount int, color string) {
 	ps.Particles = append(ps.Particles, &Particle{
 		X:       float64(x),
 		Y:       float64(y),
-		Text:    "-" + strconv.Itoa(amount),
+		Text:    "-" + intToStr(amount),
 		Color:   color,
 		Life:    0.8,
 		MaxLife: 0.8,
@@ -40,7 +39,7 @@ func (ps *ParticleSystem) SpawnCrit(x, y, amount int) {
 	ps.Particles = append(ps.Particles, &Particle{
 		X:       float64(x),
 		Y:       float64(y),
-		Text:    "CRIT -" + strconv.Itoa(amount),
+		Text:    "CRIT -" + intToStr(amount),
 		Color:   "#FFD700",
 		Life:    1.0,
 		MaxLife: 1.0,
