@@ -202,4 +202,3 @@ func SpawnShrines(rooms []*Room, floor int, rng *rand.Rand) []*Shrine {
 
 	return shrines
 }
-

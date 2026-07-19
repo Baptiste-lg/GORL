@@ -166,4 +166,3 @@ func (w *World) RemoveDead() []*Enemy {
 	w.Enemies = alive
 	return dead
 }
-

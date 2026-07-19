@@ -1,6 +1,5 @@
 package render
 
-
 // Particle is a floating text effect (damage numbers, MISS, etc).
 type Particle struct {
 	X, Y    float64 // world tile position

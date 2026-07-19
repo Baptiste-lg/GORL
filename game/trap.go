@@ -82,4 +82,3 @@ func SpawnTraps(rooms []*Room, floor int, rng *rand.Rand) []*Trap {
 type Room struct {
 	X, Y, W, H int
 }
-

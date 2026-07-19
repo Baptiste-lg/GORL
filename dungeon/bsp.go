@@ -122,4 +122,3 @@ func generateBSP(w, h int, rng *rand.Rand) []*Room {
 
 	return rooms
 }
-
