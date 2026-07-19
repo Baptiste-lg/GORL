@@ -68,11 +68,6 @@ var themeColors = [4][5]string{
 	{"#443366", "#1a0a2e", "#6633AA", "#FFD700", "#000000"},
 }
 
-// Color returns the display color for this tile.
-func (t Tile) Color() string {
-	return t.ThemedColor(ThemeStone)
-}
-
 // ThemedColor returns the display color for this tile in a given theme.
 func (t Tile) ThemedColor(theme Theme) string {
 	idx := int(theme)
@@ -103,11 +98,6 @@ func (t Tile) Passable() bool {
 // BlocksSight returns true if this tile blocks line of sight.
 func (t Tile) BlocksSight() bool {
 	return t == TileWall || t == TileVoid || t == TileCrackedWall
-}
-
-// IsDestructible returns true if this wall can be broken by attacks.
-func (t Tile) IsDestructible() bool {
-	return t == TileCrackedWall
 }
 
 // DungeonMap holds the 2D grid of tiles for a single floor.
