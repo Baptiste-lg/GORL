@@ -19,6 +19,7 @@ const (
 	StateLevelUp
 	StateDead
 	StateInventory
+	StateShop
 )
 
 const (
@@ -182,7 +183,7 @@ func (g *Game) handleKeyDown(key string) {
 		case "m", "M":
 			g.audioEngine.ToggleMute()
 		case "e", "E", "Enter":
-			g.interactShrine()
+			g.interact()
 		}
 	case StateInventory:
 		g.handleInventoryKey(key)
@@ -190,6 +191,8 @@ func (g *Game) handleKeyDown(key string) {
 		g.handlePauseKey(key)
 	case StateLevelUp:
 		g.handleLevelUpKey(key)
+	case StateShop:
+		g.handleShopKey(key)
 	}
 }
 
@@ -278,7 +281,15 @@ func (g *Game) checkLevelUp() {
 	}
 }
 
-func (g *Game) interactShrine() {
+func (g *Game) interact() {
+	// Check shop first
+	if s := g.world.Shop; s != nil && s.X == g.player.X && s.Y == g.player.Y {
+		s.Selected = 0
+		g.state = StateShop
+		return
+	}
+
+	// Then shrine
 	shrine := g.world.ShrineAt(g.player.X, g.player.Y)
 	if shrine == nil || shrine.Used {
 		return
@@ -291,6 +302,32 @@ func (g *Game) interactShrine() {
 		g.sfx.Death()
 		g.renderer.Shake(10.0, 0.5)
 		g.state = StateDead
+	}
+}
+
+func (g *Game) handleShopKey(key string) {
+	shop := g.world.Shop
+	if shop == nil {
+		g.state = StatePlaying
+		return
+	}
+
+	switch key {
+	case "Escape", "e", "E":
+		g.state = StatePlaying
+	case "ArrowUp":
+		if shop.Selected > 0 {
+			shop.Selected--
+		}
+	case "ArrowDown":
+		if shop.Selected < len(shop.Items)-1 {
+			shop.Selected++
+		}
+	case "Enter":
+		if shop.Buy(shop.Selected, g.player) {
+			g.sfx.Pickup()
+			g.particles.SpawnText(g.player.X, g.player.Y, "Purchased!", "#44ff44")
+		}
 	}
 }
 
@@ -490,6 +527,11 @@ func (g *Game) playerAttack(enemy *Enemy) {
 			g.particles.SpawnText(g.player.X, g.player.Y, g.streak.Label(), "#ff8800")
 		}
 
+		// Gold drop (always)
+		goldAmt := goldForKill(enemy.BaseXP, g.floor, g.rng)
+		g.player.Gold += goldAmt
+		g.particles.SpawnText(enemy.X, enemy.Y-1, "+"+itoa(goldAmt)+"g", "#ccaa00")
+
 		// Boss drops guaranteed rare+ loot
 		if enemy.Type.IsBoss() {
 			loot := GenerateLoot(g.rng, g.floor+5)
@@ -624,7 +666,7 @@ func (g *Game) Render() {
 	case StateMenu:
 		g.renderMenu()
 
-	case StatePlaying, StateInventory, StateLevelUp, StatePaused:
+	case StatePlaying, StateInventory, StateLevelUp, StatePaused, StateShop:
 		g.renderGameWorld()
 
 		// HUD
@@ -636,6 +678,7 @@ func (g *Game) Render() {
 			XP:     g.player.Stats.XP,
 			XPNext: g.player.Stats.XPToNextLevel(),
 			Floor:  g.floor,
+			Gold:   g.player.Gold,
 			Streak: g.streak.Label(),
 		}
 		for _, eff := range g.player.Effects {
@@ -646,8 +689,10 @@ func (g *Game) Render() {
 		}
 		g.renderer.DrawHUD(hudData)
 
-		// Shrine hint
-		if shrine := g.world.ShrineAt(g.player.X, g.player.Y); shrine != nil && !shrine.Used {
+		// Interaction hints
+		if s := g.world.Shop; s != nil && s.X == g.player.X && s.Y == g.player.Y && s.HasItems() {
+			g.renderer.DrawText(1, render.GridRows-3, "[E] Shop", "#FFD700")
+		} else if shrine := g.world.ShrineAt(g.player.X, g.player.Y); shrine != nil && !shrine.Used {
 			g.renderer.DrawText(1, render.GridRows-3, "[E] "+shrine.Name(), shrine.Color())
 		}
 
@@ -678,6 +723,8 @@ func (g *Game) Render() {
 			g.renderer.DrawLevelUp(g.player.Stats.Level+1, choices, g.levelUpSelected)
 		case StatePaused:
 			g.renderPause()
+		case StateShop:
+			g.renderer.DrawShop(g.buildShopData())
 		}
 
 	case StateDead:
@@ -726,6 +773,17 @@ func (g *Game) renderGameWorld() {
 				row := vy*render.TileCells + 1
 				g.renderer.DrawChar(col, row, trap.Glyph(), trap.Color())
 			}
+		}
+	}
+
+	// Shop NPC
+	if s := g.world.Shop; s != nil && g.fov.IsVisible(s.X, s.Y) {
+		vx := s.X - g.renderer.CamX
+		vy := s.Y - g.renderer.CamY
+		if vx >= 0 && vx < render.ViewTilesX && vy >= 0 && vy < render.ViewTilesY {
+			col := vx*render.TileCells + 1
+			row := vy*render.TileCells + 1
+			g.renderer.DrawChar(col, row, "S", "#FFD700")
 		}
 	}
 
@@ -813,8 +871,9 @@ func (g *Game) renderDeath() {
 	g.renderer.DrawText(20, 20, "Floor: "+itoa(g.floor), "#aaaaaa")
 	g.renderer.DrawText(20, 21, "Level: "+itoa(g.player.Stats.Level), "#aaaaaa")
 	g.renderer.DrawText(20, 22, "Kills: "+itoa(g.killCount), "#aaaaaa")
+	g.renderer.DrawText(20, 23, "Gold:  "+itoa(g.player.Gold), "#FFD700")
 	if g.streak.Count > 2 {
-		g.renderer.DrawText(20, 23, "Best Streak: "+itoa(g.streak.Count), "#ff8800")
+		g.renderer.DrawText(20, 24, "Best Streak: "+itoa(g.streak.Count), "#ff8800")
 	}
 	g.renderer.DrawText(18, 26, "Press ENTER to restart", "#aaaaaa")
 }
@@ -852,6 +911,27 @@ func (g *Game) buildInventoryData() render.InventoryData {
 			Color:  item.Rarity.Color(),
 			Detail: detail,
 		})
+	}
+	return data
+}
+
+func (g *Game) buildShopData() render.ShopData {
+	shop := g.world.Shop
+	data := render.ShopData{
+		Gold:     g.player.Gold,
+		Selected: shop.Selected,
+	}
+	for i, item := range shop.Items {
+		si := render.ShopItem{
+			Price: shop.Prices[i],
+			Sold:  item == nil,
+		}
+		if item != nil {
+			si.Name = item.Name
+			si.Glyph = item.Glyph()
+			si.Color = item.Rarity.Color()
+		}
+		data.Items = append(data.Items, si)
 	}
 	return data
 }
