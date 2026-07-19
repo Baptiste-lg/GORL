@@ -141,10 +141,17 @@ func intToStr(n int) string {
 	if n == 0 {
 		return "0"
 	}
+	neg := n < 0
+	if neg {
+		n = -n
+	}
 	buf := make([]byte, 0, 5)
 	for n > 0 {
 		buf = append(buf, byte('0'+n%10))
 		n /= 10
+	}
+	if neg {
+		buf = append(buf, '-')
 	}
 	for i, j := 0, len(buf)-1; i < j; i, j = i+1, j-1 {
 		buf[i], buf[j] = buf[j], buf[i]
