@@ -20,6 +20,7 @@ const (
 	StateDead
 	StateInventory
 	StateShop
+	StateEvent
 )
 
 const (
@@ -55,6 +56,9 @@ type Game struct {
 	// Level-up state
 	levelChoices    []StatBoost
 	levelUpSelected int
+
+	// Event state
+	eventState *EventState
 
 	// Loadout selection
 	selectedLoadout int
@@ -133,6 +137,16 @@ func (g *Game) nextFloor() {
 		g.particles.SpawnText(g.player.X, g.player.Y, "Unlocked: "+name+"!", "#FFD700")
 	}
 
+	// 50% chance of an event between floors
+	if g.rng.Intn(2) == 0 {
+		if evt := RollEvent(g.floor, g.rng); evt != nil {
+			g.eventState = &EventState{Event: evt}
+			g.state = StateEvent
+			// Don't generate the new floor yet — wait for event completion
+			return
+		}
+	}
+
 	g.generateFloor()
 }
 
@@ -193,6 +207,8 @@ func (g *Game) handleKeyDown(key string) {
 		g.handleLevelUpKey(key)
 	case StateShop:
 		g.handleShopKey(key)
+	case StateEvent:
+		g.handleEventKey(key)
 	}
 }
 
@@ -345,6 +361,45 @@ func (g *Game) handleShopKey(key string) {
 		if shop.Buy(shop.Selected, g.player) {
 			g.sfx.Pickup()
 			g.particles.SpawnText(g.player.X, g.player.Y, "Purchased!", "#44ff44")
+		}
+	}
+}
+
+func (g *Game) handleEventKey(key string) {
+	es := g.eventState
+	if es == nil {
+		g.state = StatePlaying
+		return
+	}
+
+	// If result is showing, Enter continues to next floor
+	if es.Result != nil {
+		if key == "Enter" {
+			g.eventState = nil
+			if !g.player.IsAlive {
+				g.state = StateDead
+				return
+			}
+			g.generateFloor()
+			g.state = StatePlaying
+		}
+		return
+	}
+
+	switch key {
+	case "ArrowUp":
+		if es.Selected > 0 {
+			es.Selected--
+		}
+	case "ArrowDown":
+		if es.Selected < len(es.Event.Choices)-1 {
+			es.Selected++
+		}
+	case "Enter":
+		if es.Selected >= 0 && es.Selected < len(es.Event.Choices) {
+			choice := es.Event.Choices[es.Selected]
+			result := choice.Action(g.player, g.rng)
+			es.Result = &result
 		}
 	}
 }
@@ -749,6 +804,9 @@ func (g *Game) Render() {
 
 	case StateDead:
 		g.renderDeath()
+
+	case StateEvent:
+		g.renderEvent()
 	}
 }
 
@@ -911,6 +969,26 @@ func (g *Game) renderDeath() {
 		g.renderer.DrawText(20, 24, "Best Streak: "+itoa(g.streak.Count), "#ff8800")
 	}
 	g.renderer.DrawText(18, 26, "Press ENTER to restart", "#aaaaaa")
+}
+
+func (g *Game) renderEvent() {
+	es := g.eventState
+	if es == nil {
+		return
+	}
+	data := render.EventData{
+		Title:    es.Event.Title,
+		Text:     es.Event.Text,
+		Selected: es.Selected,
+	}
+	for _, ch := range es.Event.Choices {
+		data.Choices = append(data.Choices, render.EventChoiceData{Label: ch.Label})
+	}
+	if es.Result != nil {
+		data.Result = es.Result.Message
+		data.ResColor = es.Result.Color
+	}
+	g.renderer.DrawEvent(data)
 }
 
 func (g *Game) buildInventoryData() render.InventoryData {
