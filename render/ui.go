@@ -190,6 +190,69 @@ func (r *Renderer) DrawShop(data ShopData) {
 	r.DrawText(ox+2, oy+boxH-2, "Esc/E: close", "#555555")
 }
 
+// EventData holds what the event overlay needs.
+type EventData struct {
+	Title    string
+	Text     string // may contain \n
+	Choices  []EventChoiceData
+	Selected int
+	Result   string // non-empty if choice was made
+	ResColor string
+}
+
+// EventChoiceData is a single event option.
+type EventChoiceData struct {
+	Label string
+}
+
+// DrawEvent renders the event encounter overlay.
+func (r *Renderer) DrawEvent(data EventData) {
+	boxW, boxH := 50, 22
+	ox, oy := (GridCols-boxW)/2, (GridRows-boxH)/2
+
+	r.DrawBox(ox, oy, boxW, boxH, "#aa88ff", "#0a0a1a")
+	r.DrawText(ox+(boxW-len(data.Title))/2, oy+1, data.Title, "#aa88ff")
+
+	// Draw text (split on \n)
+	row := oy + 3
+	line := ""
+	for i := 0; i < len(data.Text); i++ {
+		if data.Text[i] == '\n' {
+			r.DrawText(ox+3, row, line, "#cccccc")
+			row++
+			line = ""
+		} else {
+			line += string(data.Text[i])
+		}
+	}
+	if line != "" {
+		r.DrawText(ox+3, row, line, "#cccccc")
+		row++
+	}
+
+	// Show result if choice was made
+	if data.Result != "" {
+		r.DrawText(ox+3, row+2, data.Result, data.ResColor)
+		r.DrawText(ox+3, oy+boxH-2, "Press Enter to continue", "#555555")
+		return
+	}
+
+	// Draw choices
+	row += 2
+	for i, ch := range data.Choices {
+		prefix := "  "
+		color := "#aaaaaa"
+		if i == data.Selected {
+			prefix = "> "
+			color = "#ffffff"
+		}
+		r.DrawText(ox+4, row+i, prefix+ch.Label, color)
+	}
+
+	// Controls
+	r.DrawText(ox+3, oy+boxH-2, "Arrows: select  Enter: choose", "#555555")
+}
+
 func intToStr(n int) string {
 	if n == 0 {
 		return "0"
