@@ -55,7 +55,7 @@ func (w *World) spawnEnemies(rng *rand.Rand) {
 		if !w.Dungeon.Map.At(bx, by).Passable() {
 			bx = w.Dungeon.StairsX - 1
 		}
-		boss := NewEnemy(def, bx, by, w.Floor)
+		boss := NewEnemy(def, bx, by, w.Floor, rng)
 		boss.AI = AIChase
 		w.Enemies = append(w.Enemies, boss)
 	}
@@ -96,7 +96,7 @@ func (w *World) spawnEnemies(rng *rand.Rand) {
 				continue
 			}
 
-			w.Enemies = append(w.Enemies, NewEnemy(def, x, y, w.Floor))
+			w.Enemies = append(w.Enemies, NewEnemy(def, x, y, w.Floor, rng))
 		}
 	}
 }
@@ -167,9 +167,3 @@ func (w *World) RemoveDead() []*Enemy {
 	return dead
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
