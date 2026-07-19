@@ -67,6 +67,11 @@ func Generate(seed int64) *GenerateResult {
 	// Mark spawn as stairs up (previous floor)
 	dm.Set(spawnX, spawnY, TileStairsUp)
 
+	// Attempt to place a secret room (disconnected, accessible via cracked wall)
+	if secretRoom := placeSecretRoom(dm, rooms, rng); secretRoom != nil {
+		rooms = append(rooms, secretRoom)
+	}
+
 	return &GenerateResult{
 		Map:     dm,
 		Rooms:   rooms,
@@ -75,6 +80,79 @@ func Generate(seed int64) *GenerateResult {
 		StairsX: stairsX,
 		StairsY: stairsY,
 	}
+}
+
+// placeSecretRoom tries to carve a small hidden room adjacent to an existing room,
+// connected only by cracked walls. Returns nil if placement fails.
+func placeSecretRoom(dm *DungeonMap, rooms []*Room, rng *rand.Rand) *Room {
+	// Try up to 20 times to find a valid placement
+	for attempt := 0; attempt < 20; attempt++ {
+		// Pick a random existing room to attach to
+		srcIdx := rng.Intn(len(rooms))
+		src := rooms[srcIdx]
+
+		// Pick a random side: 0=top, 1=bottom, 2=left, 3=right
+		side := rng.Intn(4)
+		sw, sh := 4+rng.Intn(3), 4+rng.Intn(2) // secret room size 4-6 x 4-5
+
+		var sx, sy int // top-left of secret room
+		var cx, cy int // cracked wall position
+
+		switch side {
+		case 0: // above
+			sx = src.X + rng.Intn(max(1, src.W-sw))
+			sy = src.Y - sh - 1
+			cx = sx + sw/2
+			cy = src.Y - 1
+		case 1: // below
+			sx = src.X + rng.Intn(max(1, src.W-sw))
+			sy = src.Y + src.H + 1
+			cx = sx + sw/2
+			cy = src.Y + src.H
+		case 2: // left
+			sx = src.X - sw - 1
+			sy = src.Y + rng.Intn(max(1, src.H-sh))
+			cx = src.X - 1
+			cy = sy + sh/2
+		case 3: // right
+			sx = src.X + src.W + 1
+			sy = src.Y + rng.Intn(max(1, src.H-sh))
+			cx = src.X + src.W
+			cy = sy + sh/2
+		}
+
+		// Validate bounds
+		if sx < 1 || sy < 1 || sx+sw >= MapWidth-1 || sy+sh >= MapHeight-1 {
+			continue
+		}
+
+		// Check the area is all walls (not overlapping other rooms)
+		valid := true
+		for y := sy - 1; y <= sy+sh; y++ {
+			for x := sx - 1; x <= sx+sw; x++ {
+				if dm.At(x, y) != TileWall {
+					valid = false
+					break
+				}
+			}
+			if !valid {
+				break
+			}
+		}
+		if !valid {
+			continue
+		}
+
+		// Carve the secret room
+		room := &Room{X: sx, Y: sy, W: sw, H: sh}
+		carveRoom(dm, room)
+
+		// Place cracked wall as the only access point
+		dm.Set(cx, cy, TileCrackedWall)
+
+		return room
+	}
+	return nil
 }
 
 // carveRoom sets all tiles inside a room to floor.
