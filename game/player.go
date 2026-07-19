@@ -11,6 +11,7 @@ type StatusEffect struct {
 type Player struct {
 	*Entity
 	Inventory    *Inventory
+	Gold         int
 	MoveCooldown float64 // seconds remaining until next move
 	LastCombat   float64 // seconds since last combat (for HP regen)
 	RegenTimer   float64 // accumulator for passive regen ticks
