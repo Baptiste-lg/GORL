@@ -11,7 +11,15 @@ type Engine struct {
 
 // NewEngine creates an AudioContext and master gain node.
 func NewEngine() *Engine {
-	ctx := js.Global().Get("AudioContext").New()
+	ac := js.Global().Get("AudioContext")
+	if ac.IsUndefined() {
+		ac = js.Global().Get("webkitAudioContext")
+	}
+	if ac.IsUndefined() {
+		return &Engine{}
+	}
+
+	ctx := ac.New()
 	master := ctx.Call("createGain")
 	master.Get("gain").Set("value", 0.3)
 	master.Call("connect", ctx.Get("destination"))
@@ -24,6 +32,9 @@ func NewEngine() *Engine {
 
 // Resume unlocks the AudioContext (must be called from a user gesture).
 func (e *Engine) Resume() {
+	if e.ctx.IsUndefined() || e.ctx.IsNull() {
+		return
+	}
 	if e.ctx.Get("state").String() == "suspended" {
 		e.ctx.Call("resume")
 	}
@@ -31,16 +42,25 @@ func (e *Engine) Resume() {
 
 // CurrentTime returns the audio context's current time in seconds.
 func (e *Engine) CurrentTime() float64 {
+	if e.ctx.IsUndefined() || e.ctx.IsNull() {
+		return 0
+	}
 	return e.ctx.Get("currentTime").Float()
 }
 
 // SetVolume sets the master volume (0.0 to 1.0).
 func (e *Engine) SetVolume(v float64) {
+	if e.ctx.IsUndefined() || e.ctx.IsNull() {
+		return
+	}
 	e.masterGain.Get("gain").Set("value", v)
 }
 
 // ToggleMute toggles audio on/off.
 func (e *Engine) ToggleMute() {
+	if e.ctx.IsUndefined() || e.ctx.IsNull() {
+		return
+	}
 	e.muted = !e.muted
 	if e.muted {
 		e.masterGain.Get("gain").Set("value", 0)
@@ -50,11 +70,13 @@ func (e *Engine) ToggleMute() {
 }
 
 // PlayTone plays an oscillator at the given frequency for duration seconds.
-func (e *Engine) PlayTone(freq float64, startTime, duration float64, waveform string, volume float64) {
+func (e *Engine) PlayTone(freq, startTime, duration float64, waveform string, volume float64) {
+	if e.ctx.IsUndefined() || e.ctx.IsNull() {
+		return
+	}
 	osc := e.ctx.Call("createOscillator")
 	gain := e.ctx.Call("createGain")
 
-	osc.Get("type").Set("value", waveform) // ignored, set below
 	osc.Set("type", waveform)
 	osc.Get("frequency").Set("value", freq)
 
@@ -70,6 +92,9 @@ func (e *Engine) PlayTone(freq float64, startTime, duration float64, waveform st
 
 // PlayNoise plays a short burst of noise (for percussion/SFX).
 func (e *Engine) PlayNoise(startTime, duration, volume float64) {
+	if e.ctx.IsUndefined() || e.ctx.IsNull() {
+		return
+	}
 	// Create a buffer of random samples
 	sampleRate := e.ctx.Get("sampleRate").Float()
 	length := int(sampleRate * duration)
@@ -110,8 +135,5 @@ func NoteFreq(note string, octave int) float64 {
 	if !ok {
 		return 440.0
 	}
-	for i := 0; i < octave; i++ {
-		base *= 2
-	}
-	return base
+	return base * float64(int(1)<<octave)
 }
