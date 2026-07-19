@@ -123,9 +123,3 @@ func generateBSP(w, h int, rng *rand.Rand) []*Room {
 	return rooms
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
