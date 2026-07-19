@@ -145,6 +145,9 @@ func eventBuyPotion(p *Player, rng *rand.Rand) EventResult {
 	if p.Gold < 30 {
 		return EventResult{Message: "Not enough gold!", Color: "#ff4444"}
 	}
+	if p.Inventory.IsFull() {
+		return EventResult{Message: "Inventory full!", Color: "#ff4444"}
+	}
 	p.Gold -= 30
 	p.Inventory.Add(&Item{
 		Name: "Health Potion", Type: ItemPotion,
