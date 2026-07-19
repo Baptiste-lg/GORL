@@ -137,6 +137,59 @@ func (r *Renderer) DrawLevelUp(level int, choices []LevelUpChoice, selected int)
 	r.DrawText(ox+2, oy+boxH-2, "Enter: confirm", "#555555")
 }
 
+// ShopItem is a single item in the shop display.
+type ShopItem struct {
+	Name  string
+	Glyph string
+	Color string
+	Price int
+	Sold  bool
+}
+
+// ShopData holds what the shop overlay needs.
+type ShopData struct {
+	Items    []ShopItem
+	Gold     int
+	Selected int
+}
+
+// DrawShop renders the shop overlay.
+func (r *Renderer) DrawShop(data ShopData) {
+	boxW, boxH := 44, 20
+	ox, oy := (GridCols-boxW)/2, (GridRows-boxH)/2
+
+	r.DrawBox(ox, oy, boxW, boxH, "#FFD700", "#111111")
+	r.DrawText(ox+18, oy+1, "SHOP", "#FFD700")
+	r.DrawText(ox+2, oy+3, "Your Gold: "+intToStr(data.Gold), "#FFD700")
+
+	// Items list
+	for i, item := range data.Items {
+		y := oy + 5 + i*2
+		prefix := "  "
+		if i == data.Selected {
+			prefix = "> "
+		}
+
+		if item.Sold {
+			r.DrawText(ox+2, y, prefix+"--- SOLD ---", "#444444")
+			continue
+		}
+
+		nameStr := prefix + item.Glyph + " " + item.Name
+		priceStr := intToStr(item.Price) + "g"
+		color := item.Color
+		if data.Gold < item.Price {
+			priceStr += " (can't afford)"
+		}
+		r.DrawText(ox+2, y, nameStr, color)
+		r.DrawText(ox+boxW-len(priceStr)-3, y, priceStr, "#FFD700")
+	}
+
+	// Controls
+	r.DrawText(ox+2, oy+boxH-3, "Arrows: select  Enter: buy", "#555555")
+	r.DrawText(ox+2, oy+boxH-2, "Esc/E: close", "#555555")
+}
+
 func intToStr(n int) string {
 	if n == 0 {
 		return "0"
