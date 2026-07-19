@@ -17,8 +17,8 @@ func NewShop(x, y, floor int, rng *rand.Rand) *Shop {
 	bonus := FloorRarityBonus(floor) + 0.1
 
 	items := []*Item{
-		generateShopWeapon(rng, floor, bonus),
-		generateShopArmor(rng, floor, bonus),
+		generateShopWeapon(rng, bonus),
+		generateShopArmor(rng, bonus),
 		GeneratePotion(rng, floor),
 		GenerateScroll(rng, floor),
 	}
@@ -67,7 +67,7 @@ func (s *Shop) HasItems() bool {
 	return false
 }
 
-func generateShopWeapon(rng *rand.Rand, floor int, bonus float64) *Item {
+func generateShopWeapon(rng *rand.Rand, bonus float64) *Item {
 	rarity := RollRarity(rng, bonus)
 	b := int(rarity) + 1 + rng.Intn(int(rarity)+1)
 	return &Item{
@@ -79,7 +79,7 @@ func generateShopWeapon(rng *rand.Rand, floor int, bonus float64) *Item {
 	}
 }
 
-func generateShopArmor(rng *rand.Rand, floor int, bonus float64) *Item {
+func generateShopArmor(rng *rand.Rand, bonus float64) *Item {
 	rarity := RollRarity(rng, bonus)
 	b := int(rarity) + 1 + rng.Intn(int(rarity)+1)
 	return &Item{
