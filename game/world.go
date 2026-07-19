@@ -52,10 +52,27 @@ func NewWorld(dg *dungeon.GenerateResult, floor int, rng *rand.Rand) *World {
 	}
 	w.RoomRoles[stairsIdx] = RoleStairs
 
-	// Collect available room indices (not spawn, not stairs)
+	// Mark secret room early (last room, added by generator on floor >= 2)
+	secretIdx := -1
+	lastIdx := len(rooms) - 1
+	if floor >= 2 && lastIdx > stairsIdx && lastIdx > 0 {
+		secretIdx = lastIdx
+		w.RoomRoles[secretIdx] = RoleSecret
+		r := rooms[secretIdx]
+		secretLoot := GenerateLoot(rng, floor+5)
+		secretLoot.X = r.X + r.W/2
+		secretLoot.Y = r.Y + r.H/2
+		w.GroundItems = append(w.GroundItems, secretLoot)
+		goldLoot := GenerateLoot(rng, floor+3)
+		goldLoot.X = r.X + r.W/2 + 1
+		goldLoot.Y = r.Y + r.H/2
+		w.GroundItems = append(w.GroundItems, goldLoot)
+	}
+
+	// Collect available room indices (not spawn, not stairs, not secret)
 	var available []int
 	for i := range rooms {
-		if i == 0 || i == stairsIdx {
+		if i == 0 || i == stairsIdx || i == secretIdx {
 			continue
 		}
 		available = append(available, i)
@@ -95,26 +112,6 @@ func NewWorld(dg *dungeon.GenerateResult, floor int, rng *rand.Rand) *World {
 		assigned++
 		w.RoomRoles[idx] = RoleChallenge
 		w.ChallengeRoom = idx
-	}
-
-	// Mark secret room if present (last room if it has no corridor connection)
-	// The secret room is always the last room appended by the generator
-	// and won't be in our available list since it's unreachable normally.
-	// Identify it: any room index not yet assigned a role and not in 'available' remaining
-	// Simpler: if floor >= 2, the last room index that has no role is the secret
-	lastIdx := len(rooms) - 1
-	if floor >= 2 && lastIdx > stairsIdx && w.RoomRoles[lastIdx] == RoleNormal {
-		w.RoomRoles[lastIdx] = RoleSecret
-		r := rooms[lastIdx]
-		secretLoot := GenerateLoot(rng, floor+5)
-		secretLoot.X = r.X + r.W/2
-		secretLoot.Y = r.Y + r.H/2
-		w.GroundItems = append(w.GroundItems, secretLoot)
-		// Add bonus gold in secret room
-		goldLoot := GenerateLoot(rng, floor+3)
-		goldLoot.X = r.X + r.W/2 + 1
-		goldLoot.Y = r.Y + r.H/2
-		w.GroundItems = append(w.GroundItems, goldLoot)
 	}
 
 	w.spawnEnemies(rng)
