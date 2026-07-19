@@ -859,12 +859,31 @@ func (g *Game) buildInventoryData() render.InventoryData {
 func (g *Game) Run() {
 	var frame js.Func
 	frame = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		defer func() {
+			if r := recover(); r != nil {
+				msg := "unknown panic"
+				if err, ok := r.(error); ok {
+					msg = err.Error()
+				} else if s, ok := r.(string); ok {
+					msg = s
+				}
+				js.Global().Get("console").Call("error", "GORL panic recovered: "+msg)
+				g.state = StateMenu
+				g.player = nil
+			}
+		}()
+
 		now := args[0].Float()
 		if g.lastTime == 0 {
 			g.lastTime = now
 		}
 		dt := (now - g.lastTime) / 1000.0
 		g.lastTime = now
+
+		// Cap delta time to prevent spiral of death after tab switch
+		if dt > 0.1 {
+			dt = 0.1
+		}
 
 		g.Update(dt)
 		g.Render()
