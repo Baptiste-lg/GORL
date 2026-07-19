@@ -92,7 +92,7 @@ func (ps *ParticleSystem) Draw(r *Renderer) {
 		vx := int(p.X) - r.CamX
 		vy := p.Y - float64(r.CamY)
 
-		if vx < 0 || vx >= ViewTilesX || vy < 0 || float64(vy) >= float64(ViewTilesY) {
+		if vx < 0 || vx >= ViewTilesX || vy < 0 || vy >= float64(ViewTilesY) {
 			continue
 		}
 
