@@ -80,6 +80,12 @@ func (r *Renderer) DrawHUD(d HUDData) {
 	}
 }
 
+// MiniMapMarker is a colored dot on the minimap.
+type MiniMapMarker struct {
+	X, Y  int
+	Color string
+}
+
 // MiniMapData holds what the mini-map needs.
 type MiniMapData struct {
 	MapW, MapH int
@@ -87,6 +93,7 @@ type MiniMapData struct {
 	PlayerY    int
 	IsExplored func(x, y int) bool
 	IsWall     func(x, y int) bool
+	Markers    []MiniMapMarker
 }
 
 // DrawMiniMap renders a small overview in the bottom-right corner.
@@ -133,7 +140,19 @@ func (r *Renderer) DrawMiniMap(d MiniMapData) {
 		}
 	}
 
-	// Player dot
+	// Special room markers (only if explored)
+	for _, m := range d.Markers {
+		if !d.IsExplored(m.X, m.Y) {
+			continue
+		}
+		mx := int(float64(m.X) / scaleX)
+		my := int(float64(m.Y) / scaleY)
+		if mx >= 0 && mx < mmW && my >= 0 && my < mmH {
+			r.FillCell(ox+mx, oy+my, m.Color)
+		}
+	}
+
+	// Player dot (drawn last, on top)
 	px := int(float64(d.PlayerX) / scaleX)
 	py := int(float64(d.PlayerY) / scaleY)
 	if px >= 0 && px < mmW && py >= 0 && py < mmH {
