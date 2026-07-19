@@ -131,7 +131,7 @@ func (um *UnlockManager) save() {
 		if val != "" {
 			val += ","
 		}
-		val += intStr(int(id))
+		val += itoa(int(id))
 	}
 	storage.Call("setItem", storageKey, val)
 }
