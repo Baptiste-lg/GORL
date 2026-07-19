@@ -232,4 +232,3 @@ func (r *Renderer) DrawSprite(sprite *Sprite, frame int, worldX, worldY int, col
 		}
 	}
 }
-
