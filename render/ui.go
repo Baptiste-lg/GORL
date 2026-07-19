@@ -39,7 +39,6 @@ type InventoryItem struct {
 	Name   string
 	Glyph  string
 	Color  string
-	IsSel  bool
 	Detail string // e.g. "+3 STR +1 DEX"
 }
 
@@ -215,19 +214,15 @@ func (r *Renderer) DrawEvent(data EventData) {
 
 	// Draw text (split on \n)
 	row := oy + 3
-	line := ""
-	for i := 0; i < len(data.Text); i++ {
-		if data.Text[i] == '\n' {
-			r.DrawText(ox+3, row, line, "#cccccc")
+	start := 0
+	for i := 0; i <= len(data.Text); i++ {
+		if i == len(data.Text) || data.Text[i] == '\n' {
+			if i > start {
+				r.DrawText(ox+3, row, data.Text[start:i], "#cccccc")
+			}
 			row++
-			line = ""
-		} else {
-			line += string(data.Text[i])
+			start = i + 1
 		}
-	}
-	if line != "" {
-		r.DrawText(ox+3, row, line, "#cccccc")
-		row++
 	}
 
 	// Show result if choice was made
