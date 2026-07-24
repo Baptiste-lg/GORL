@@ -49,60 +49,63 @@ func HPColor(baseColor string, hpRatio float64) string {
 var Sprites = map[string]*Sprite{
 	"player": {
 		Frames: [][]string{
-			{" O ", "/|\\", "/ \\"}, // idle
-			{" O ", "/|\\", "| |"},  // walk
+			{" /\\", "{||}", " /\\"},  // idle - hooded cloak
+			{" /\\", "{||}", " ||"},   // walk
 		},
-		Color: "#00ff00",
+		Color: "#44ff88",
 	},
 	"rat": {
 		Frames: [][]string{
-			{"   ", "o--", " ''"},
+			{";\\ ", "(\")", " ''"},
 		},
-		Color: "#cc8844", // brighter brown
+		Color: "#cc8844",
 	},
 	"skeleton": {
 		Frames: [][]string{
-			{"._.", "/X\\", "| |"},
-			{"._.", "/X\\", "/ \\"},
+			{".^.", "/+\\", "| |"},
+			{".^.", "/+\\", "/ \\"},
 		},
 		Color: "#eeeedd",
 	},
 	"bat": {
 		Frames: [][]string{
-			{"/V\\", "\\_/", "   "},
-			{"/v\\", "/ \\", "   "},
+			{"^.^", "/W\\", "   "},
+			{"v.v", "\\W/", "   "},
 		},
-		Color: "#bb88ee", // brighter purple
+		Color: "#cc99ff",
 	},
 	"slime": {
 		Frames: [][]string{
-			{"___", "(o_o)", "~~~"},
+			{" _ ", "(~)", "~~~"},
+			{"._.", "(o~)", " ~~"},
 		},
-		Color: "#55ee55", // brighter green
+		Color: "#55ee55",
 	},
 	"ghost": {
 		Frames: [][]string{
-			{"___", "(O.O)", "^^^"},
-			{"___", "(o.o)", "^^^"},
+			{".-.", "(O)", "^^^"},
+			{".-.", "(o)", "~~~"},
 		},
 		Color: "#ccccff",
 	},
 	"minotaur": {
 		Frames: [][]string{
-			{"(\\=/)", " |X| ", " / \\ "},
+			{"(\\=/)", " |X| ", "_/ \\_"},
 		},
-		Color: "#ff6622", // brighter orange
+		Color: "#ff7733",
 	},
 	"lich": {
 		Frames: [][]string{
-			{"{@_@}", " |#| ", " /|\\ "},
+			{"{@_@}", " ]#[ ", " /|\\ "},
+			{"{o_o}", " ]#[ ", " /|\\ "},
 		},
-		Color: "#bb44ff", // brighter purple
+		Color: "#cc55ff",
 	},
 	"dragon": {
 		Frames: [][]string{
-			{"<{O=O}>", " /|=|\\ ", "_/||||\\_"},
+			{"<{O=O}>", " /|=|\\ ", "_/|||\\_"},
+			{"<{o=o}>", " /|=|\\ ", "_/ | \\_"},
 		},
-		Color: "#ff4422", // brighter red
+		Color: "#ff5533",
 	},
 }
