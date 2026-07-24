@@ -32,6 +32,7 @@ type InventoryData struct {
 	ArmorName   string
 	ArmorColor  string
 	Selected    int
+	Synergies   []string // active synergy descriptions
 }
 
 // InventoryItem is a simplified item for rendering.
@@ -95,6 +96,21 @@ func (r *Renderer) DrawInventory(data InventoryData) {
 		tipY := oy + 9 + len(data.Items) + 1
 		if item.Detail != "" {
 			r.DrawText(ox+3, tipY, item.Detail, "#aaaaaa")
+		}
+	}
+
+	// Synergies
+	if len(data.Synergies) > 0 {
+		synY := oy + 9 + len(data.Items) + 3
+		if data.Selected >= 0 && data.Selected < len(data.Items) && data.Items[data.Selected].Detail != "" {
+			synY++
+		}
+		r.DrawText(ox+2, synY, "Synergies:", "#cc44ff")
+		for i, s := range data.Synergies {
+			if synY+1+i >= oy+boxH-3 {
+				break
+			}
+			r.DrawText(ox+3, synY+1+i, "* "+s, "#aa88ff")
 		}
 	}
 
