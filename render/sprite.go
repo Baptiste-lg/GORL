@@ -58,51 +58,51 @@ var Sprites = map[string]*Sprite{
 		Frames: [][]string{
 			{"   ", "o--", " ''"},
 		},
-		Color: "#8B4513",
+		Color: "#cc8844", // brighter brown
 	},
 	"skeleton": {
 		Frames: [][]string{
 			{"._.", "/X\\", "| |"},
 			{"._.", "/X\\", "/ \\"},
 		},
-		Color: "#cccccc",
+		Color: "#eeeedd",
 	},
 	"bat": {
 		Frames: [][]string{
 			{"/V\\", "\\_/", "   "},
 			{"/v\\", "/ \\", "   "},
 		},
-		Color: "#9966cc",
+		Color: "#bb88ee", // brighter purple
 	},
 	"slime": {
 		Frames: [][]string{
 			{"___", "(o_o)", "~~~"},
 		},
-		Color: "#33cc33",
+		Color: "#55ee55", // brighter green
 	},
 	"ghost": {
 		Frames: [][]string{
 			{"___", "(O.O)", "^^^"},
 			{"___", "(o.o)", "^^^"},
 		},
-		Color: "#aaaaff",
+		Color: "#ccccff",
 	},
 	"minotaur": {
 		Frames: [][]string{
 			{"(\\=/)", " |X| ", " / \\ "},
 		},
-		Color: "#cc4400",
+		Color: "#ff6622", // brighter orange
 	},
 	"lich": {
 		Frames: [][]string{
 			{"{@_@}", " |#| ", " /|\\ "},
 		},
-		Color: "#8800cc",
+		Color: "#bb44ff", // brighter purple
 	},
 	"dragon": {
 		Frames: [][]string{
 			{"<{O=O}>", " /|=|\\ ", "_/||||\\_"},
 		},
-		Color: "#ff2200",
+		Color: "#ff4422", // brighter red
 	},
 }
