@@ -12,17 +12,17 @@ const (
 	TileCrackedWall
 )
 
-// Glyph returns the ASCII character for this tile.
+// Glyph returns the display character for this tile.
 func (t Tile) Glyph() string {
 	switch t {
 	case TileWall:
-		return "#"
+		return "▓"
 	case TileCrackedWall:
-		return "%"
+		return "▒"
 	case TileFloor:
-		return "."
+		return "·"
 	case TileDoor:
-		return "+"
+		return "▌"
 	case TileStairsDown:
 		return ">"
 	case TileStairsUp:
@@ -41,15 +41,27 @@ func (t Tile) GlyphVariant(x, y int) string {
 			return ","
 		}
 		if h == 1 {
-			return "`"
+			return "∙"
 		}
-		return "."
+		if h == 2 {
+			return " " // some floor tiles are blank (just bg)
+		}
+		return "·"
 	case TileWall:
 		h := (x*11 + y*17) & 7
 		if h == 0 {
-			return "+"
+			return "█"
 		}
-		return "#"
+		if h == 1 {
+			return "▓"
+		}
+		return "▓"
+	case TileCrackedWall:
+		h := (x*5 + y*9) & 3
+		if h == 0 {
+			return "░"
+		}
+		return "▒"
 	default:
 		return t.Glyph()
 	}
@@ -82,26 +94,26 @@ func ThemeForFloor(floor int) Theme {
 // themeColors maps [theme][tile] to a foreground color string.
 var themeColors = [4][5]string{
 	// Stone: wall, floor, door, stairs, void
-	{"#888888", "#555555", "#AA6633", "#FFD700", "#000000"},
+	{"#8a8a7a", "#6a6a60", "#b08040", "#ffee55", "#000000"},
 	// Crypt
-	{"#558855", "#447744", "#77884A", "#FFD700", "#000000"},
+	{"#5a8a5a", "#4a7a4a", "#88a050", "#ffee55", "#000000"},
 	// Inferno
-	{"#AA5533", "#775544", "#CC6600", "#FFD700", "#000000"},
+	{"#aa6644", "#886655", "#dd7722", "#ffee55", "#000000"},
 	// Abyss
-	{"#665588", "#554477", "#8855CC", "#FFD700", "#000000"},
+	{"#7766aa", "#665599", "#9966dd", "#ffee55", "#000000"},
 }
 
 // themeBgColors maps [theme][tile] to a background color string.
 // wall, floor, door, stairs, explored-not-visible
 var themeBgColors = [4][5]string{
-	// Stone — walls clearly darker/heavier than floors
-	{"#282830", "#181820", "#201a14", "#181820", "#0e0e12"},
+	// Stone — strong wall/floor contrast
+	{"#2a2a32", "#141418", "#241c12", "#1a1a20", "#0c0c10"},
 	// Crypt
-	{"#1a2a1a", "#0e1a0e", "#1a2010", "#0e1a0e", "#0a120a"},
+	{"#1e2e1e", "#0c160c", "#1e2412", "#0c160c", "#081008"},
 	// Inferno
-	{"#2a1810", "#1a100c", "#221408", "#1a100c", "#120c08"},
+	{"#301c12", "#1a0e0a", "#28180c", "#1a0e0a", "#100a06"},
 	// Abyss
-	{"#201840", "#14102a", "#1a1430", "#14102a", "#0e0a1e"},
+	{"#241c44", "#120e22", "#1e1836", "#120e22", "#0a081a"},
 }
 
 // BgColor returns the background color for this tile in the given theme.
