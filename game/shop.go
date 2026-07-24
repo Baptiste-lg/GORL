@@ -70,23 +70,35 @@ func (s *Shop) HasItems() bool {
 func generateShopWeapon(rng *rand.Rand, bonus float64) *Item {
 	rarity := RollRarity(rng, bonus)
 	b := int(rarity) + 1 + rng.Intn(int(rarity)+1)
+	affixes := RollAffixes(rng, ItemWeapon, rarity)
+	name := genWeaponName(rng, rarity)
+	if len(affixes) > 0 {
+		name = AffixNames(affixes) + " " + name
+	}
 	return &Item{
-		Name:     genWeaponName(rng, rarity),
+		Name:     name,
 		Type:     ItemWeapon,
 		Rarity:   rarity,
 		BonusSTR: b,
 		BonusDEX: rng.Intn(int(rarity) + 1),
+		Affixes:  affixes,
 	}
 }
 
 func generateShopArmor(rng *rand.Rand, bonus float64) *Item {
 	rarity := RollRarity(rng, bonus)
 	b := int(rarity) + 1 + rng.Intn(int(rarity)+1)
+	affixes := RollAffixes(rng, ItemArmor, rarity)
+	name := genArmorName(rng, rarity)
+	if len(affixes) > 0 {
+		name = AffixNames(affixes) + " " + name
+	}
 	return &Item{
-		Name:     genArmorName(rng, rarity),
+		Name:     name,
 		Type:     ItemArmor,
 		Rarity:   rarity,
 		BonusVIT: b,
 		BonusDEX: rng.Intn(int(rarity) + 1),
+		Affixes:  affixes,
 	}
 }
