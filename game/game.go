@@ -1106,6 +1106,211 @@ func (g *Game) processEnemyCombat() {
 	}
 }
 
+func (g *Game) processBossAbilities(dt float64) {
+	px, py := g.player.X, g.player.Y
+	for _, e := range g.world.Enemies {
+		if !e.IsAlive || e.Boss == nil {
+			continue
+		}
+		bs := e.Boss
+
+		// Update phase
+		newPhase := BossCurrentPhase(e.Stats.HP, e.Stats.MaxHP())
+		if newPhase != bs.Phase {
+			bs.Phase = newPhase
+			if newPhase == BossPhase3 && !bs.Enraged {
+				bs.Enraged = true
+				e.Stats.STR += e.Stats.STR / 2 // +50% damage when enraged
+				g.particles.SpawnText(e.X, e.Y, "ENRAGED!", "#ff0000")
+				g.renderer.Shake(8.0, 0.4)
+			}
+		}
+
+		// Tick ability cooldown
+		bs.AbilityCD -= dt
+		if bs.AbilityCD > 0 {
+			continue
+		}
+
+		// Use ability based on type and phase
+		switch e.Type {
+		case EnemyMinotaur:
+			g.bossMinotaurAbility(e, px, py)
+		case EnemyLich:
+			g.bossLichAbility(e, px, py)
+		case EnemyDragon:
+			g.bossDragonAbility(e, px, py)
+		}
+	}
+}
+
+func (g *Game) bossMinotaurAbility(e *Enemy, px, py int) {
+	bs := e.Boss
+	switch bs.Phase {
+	case BossPhase1:
+		// Charge: telegraph a line toward player, damage next tick
+		dx, dy := sign(px-e.X), sign(py-e.Y)
+		if dx == 0 && dy == 0 {
+			dy = 1
+		}
+		for i := 1; i <= 4; i++ {
+			tx, ty := e.X+dx*i, e.Y+dy*i
+			if !g.dungeonResult.Map.At(tx, ty).Passable() {
+				break
+			}
+			g.world.DangerTiles = append(g.world.DangerTiles, DangerTile{X: tx, Y: ty, Timer: 0.8})
+		}
+		g.particles.SpawnText(e.X, e.Y, "CHARGE!", "#ff4400")
+		bs.AbilityCD = 4.0
+
+	case BossPhase2, BossPhase3:
+		// Stomp: AoE around self
+		for dy := -2; dy <= 2; dy++ {
+			for dx := -2; dx <= 2; dx++ {
+				if dx == 0 && dy == 0 {
+					continue
+				}
+				tx, ty := e.X+dx, e.Y+dy
+				g.world.DangerTiles = append(g.world.DangerTiles, DangerTile{X: tx, Y: ty, Timer: 0.6})
+			}
+		}
+		g.particles.SpawnText(e.X, e.Y, "STOMP!", "#ff8800")
+		g.renderer.Shake(6.0, 0.3)
+		cd := 3.5
+		if bs.Phase == BossPhase3 {
+			cd = 2.0
+		}
+		bs.AbilityCD = cd
+	}
+}
+
+func (g *Game) bossLichAbility(e *Enemy, px, py int) {
+	bs := e.Boss
+	switch bs.Phase {
+	case BossPhase1:
+		// Summon: spawn 1-2 skeletons nearby
+		count := 1
+		if bs.Phase >= BossPhase2 {
+			count = 2
+		}
+		for i := 0; i < count; i++ {
+			dirs := [][2]int{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
+			for _, d := range dirs {
+				sx, sy := e.X+d[0]*2, e.Y+d[1]*2
+				if g.dungeonResult.Map.At(sx, sy).Passable() && g.world.EnemyAt(sx, sy) == nil {
+					def := EnemyDefs[EnemySkeleton]
+					summon := NewEnemy(def, sx, sy, g.floor, g.rng)
+					summon.AI = AIChase
+					g.world.Enemies = append(g.world.Enemies, summon)
+					g.particles.SpawnText(sx, sy, "SUMMON!", "#8800cc")
+					bs.SummonCount++
+					break
+				}
+			}
+		}
+		bs.AbilityCD = 5.0
+
+	case BossPhase2, BossPhase3:
+		// Drain: deal damage to player, heal self
+		drainDmg := 5
+		if bs.Phase == BossPhase3 {
+			drainDmg = 8
+		}
+		dist := e.distTo(px, py)
+		if dist <= 6 {
+			g.player.Entity.TakeDamage(drainDmg)
+			e.Heal(drainDmg * 2)
+			g.particles.SpawnDamage(px, py, drainDmg, "#8800cc")
+			g.particles.SpawnText(e.X, e.Y, "+"+itoa(drainDmg*2)+" HP", "#44ff44")
+			g.renderer.Shake(3.0, 0.2)
+		}
+		if !g.player.IsAlive {
+			g.sfx.Death()
+			g.renderer.Shake(10.0, 0.5)
+			g.state = StateDead
+		}
+		bs.AbilityCD = 4.0
+	}
+}
+
+func (g *Game) bossDragonAbility(e *Enemy, px, py int) {
+	bs := e.Boss
+	switch bs.Phase {
+	case BossPhase1:
+		// Fire breath: line AoE toward player
+		dx, dy := sign(px-e.X), sign(py-e.Y)
+		if dx == 0 && dy == 0 {
+			dx = 1
+		}
+		reach := 5
+		for i := 1; i <= reach; i++ {
+			tx, ty := e.X+dx*i, e.Y+dy*i
+			if !g.dungeonResult.Map.At(tx, ty).Passable() {
+				break
+			}
+			g.world.DangerTiles = append(g.world.DangerTiles, DangerTile{X: tx, Y: ty, Timer: 0.5})
+			// Also hit adjacent tiles for wider breath
+			g.world.DangerTiles = append(g.world.DangerTiles, DangerTile{X: tx + dy, Y: ty + dx, Timer: 0.5})
+			g.world.DangerTiles = append(g.world.DangerTiles, DangerTile{X: tx - dy, Y: ty - dx, Timer: 0.5})
+		}
+		g.particles.SpawnText(e.X, e.Y, "FIRE BREATH!", "#ff2200")
+		bs.AbilityCD = 4.0
+
+	case BossPhase2:
+		// Roar: stun player for 1 second
+		g.player.MoveCooldown += 1.0
+		g.particles.SpawnText(e.X, e.Y, "ROAR!", "#ff4400")
+		g.renderer.Shake(8.0, 0.5)
+		bs.AbilityCD = 3.0
+
+	case BossPhase3:
+		// Combined: breath + roar
+		dx, dy := sign(px-e.X), sign(py-e.Y)
+		if dx == 0 && dy == 0 {
+			dx = 1
+		}
+		for i := 1; i <= 6; i++ {
+			tx, ty := e.X+dx*i, e.Y+dy*i
+			if !g.dungeonResult.Map.At(tx, ty).Passable() {
+				break
+			}
+			g.world.DangerTiles = append(g.world.DangerTiles, DangerTile{X: tx, Y: ty, Timer: 0.4})
+			g.world.DangerTiles = append(g.world.DangerTiles, DangerTile{X: tx + dy, Y: ty + dx, Timer: 0.4})
+			g.world.DangerTiles = append(g.world.DangerTiles, DangerTile{X: tx - dy, Y: ty - dx, Timer: 0.4})
+		}
+		g.player.MoveCooldown += 0.5
+		g.particles.SpawnText(e.X, e.Y, "INFERNO!", "#ff0000")
+		g.renderer.Shake(10.0, 0.5)
+		bs.AbilityCD = 2.5
+	}
+}
+
+func (g *Game) processDangerTiles(dt float64) {
+	alive := g.world.DangerTiles[:0]
+	for i := range g.world.DangerTiles {
+		g.world.DangerTiles[i].Timer -= dt
+		if g.world.DangerTiles[i].Timer <= 0 {
+			// Deal damage if player is on this tile
+			d := g.world.DangerTiles[i]
+			if d.X == g.player.X && d.Y == g.player.Y {
+				dmg := 8 + g.floor
+				g.player.Entity.TakeDamage(dmg)
+				g.particles.SpawnDamage(d.X, d.Y, dmg, "#ff4400")
+				g.player.LastCombat = 0
+			}
+		} else {
+			alive = append(alive, g.world.DangerTiles[i])
+		}
+	}
+	g.world.DangerTiles = alive
+
+	if !g.player.IsAlive {
+		g.sfx.Death()
+		g.renderer.Shake(10.0, 0.5)
+		g.state = StateDead
+	}
+}
+
 func (g *Game) processRegen(dt float64) {
 	if g.player.LastCombat < regenDelay {
 		return
@@ -1172,6 +1377,8 @@ func (g *Game) Update(dt float64) {
 		}
 		g.world.UpdateEnemies(dt, g.player.X, g.player.Y, detectRange)
 		g.processEnemyCombat()
+		g.processBossAbilities(dt)
+		g.processDangerTiles(dt)
 		g.world.RemoveDead()
 		g.checkChallengeCleared()
 		g.processHazards(dt)
@@ -1362,6 +1569,23 @@ func (g *Game) renderGameWorld() {
 				row := vy*render.TileCells + 1
 				g.renderer.DrawChar(col, row, haz.Glyph(), haz.Color())
 			}
+		}
+	}
+
+	// Danger tiles (telegraphed boss attacks) — flashing red
+	for _, d := range g.world.DangerTiles {
+		vx := d.X - g.renderer.CamX
+		vy := d.Y - g.renderer.CamY
+		if vx >= 0 && vx < render.ViewTilesX && vy >= 0 && vy < render.ViewTilesY {
+			col := vx * render.TileCells
+			row := vy * render.TileCells
+			// Fill the 3x3 cell block with translucent red
+			for cy := 0; cy < render.TileCells; cy++ {
+				for cx := 0; cx < render.TileCells; cx++ {
+					g.renderer.FillCell(col+cx, row+cy, "#440000")
+				}
+			}
+			g.renderer.DrawChar(col+1, row+1, "X", "#ff2200")
 		}
 	}
 
