@@ -120,6 +120,17 @@ func sinApprox(x float64) float64 {
 	return x * (1.27 - 0.405*x)
 }
 
+// FillTileBg fills the 3x3 cell block for a tile with a background color.
+func (r *Renderer) FillTileBg(vx, vy int, color string) {
+	baseCol := vx * TileCells
+	baseRow := vy * TileCells
+	for dy := 0; dy < TileCells; dy++ {
+		for dx := 0; dx < TileCells; dx++ {
+			r.FillCell(baseCol+dx, baseRow+dy, color)
+		}
+	}
+}
+
 // DrawDungeonThemed renders the dungeon with a specific color theme.
 func (r *Renderer) DrawDungeonThemed(dm *dungeon.DungeonMap, fov *dungeon.FOV, theme dungeon.Theme) {
 	for vy := 0; vy < ViewTilesY; vy++ {
@@ -136,9 +147,11 @@ func (r *Renderer) DrawDungeonThemed(dm *dungeon.DungeonMap, fov *dungeon.FOV, t
 			row := vy*TileCells + 1
 
 			if fov.IsVisible(wx, wy) {
-				r.DrawChar(col, row, tile.Glyph(), tile.ThemedColor(theme))
+				r.FillTileBg(vx, vy, tile.BgColor(theme))
+				r.DrawChar(col, row, tile.GlyphVariant(wx, wy), tile.ThemedColor(theme))
 			} else if fov.IsExplored(wx, wy) {
-				r.DrawChar(col, row, tile.Glyph(), dimColor(tile.ThemedColor(theme)))
+				r.FillTileBg(vx, vy, tile.DimBgColor(theme))
+				r.DrawChar(col, row, tile.GlyphVariant(wx, wy), dimColor(tile.ThemedColor(theme)))
 			}
 		}
 	}
@@ -207,20 +220,30 @@ func (r *Renderer) FillCell(col, row int, color string) {
 }
 
 // DrawSprite renders a multi-char sprite at a world tile position.
-// The sprite is drawn within the 3x3 cell block for that tile.
-// worldX/worldY are tile coords; the renderer converts to screen coords using the camera.
 func (r *Renderer) DrawSprite(sprite *Sprite, frame int, worldX, worldY int, color string) {
-	// Convert world tile to viewport tile
+	r.DrawSpriteWithBg(sprite, frame, worldX, worldY, color, "")
+}
+
+// DrawSpriteWithBg renders a sprite with an optional background tint behind it.
+func (r *Renderer) DrawSpriteWithBg(sprite *Sprite, frame int, worldX, worldY int, color, bgColor string) {
 	vx := worldX - r.CamX
 	vy := worldY - r.CamY
 
 	if vx < 0 || vx >= ViewTilesX || vy < 0 || vy >= ViewTilesY {
-		return // off screen
+		return
 	}
 
-	// Top-left cell of the 3x3 block
 	baseCol := vx * TileCells
 	baseRow := vy * TileCells
+
+	// Draw background tint if specified
+	if bgColor != "" {
+		for dy := 0; dy < TileCells; dy++ {
+			for dx := 0; dx < TileCells; dx++ {
+				r.FillCell(baseCol+dx, baseRow+dy, bgColor)
+			}
+		}
+	}
 
 	lines := sprite.Frame(frame)
 	for row, line := range lines {
