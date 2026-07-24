@@ -82,26 +82,26 @@ func ThemeForFloor(floor int) Theme {
 // themeColors maps [theme][tile] to a foreground color string.
 var themeColors = [4][5]string{
 	// Stone: wall, floor, door, stairs, void
-	{"#666666", "#444444", "#8B4513", "#FFD700", "#000000"},
+	{"#888888", "#555555", "#AA6633", "#FFD700", "#000000"},
 	// Crypt
-	{"#446644", "#335533", "#556B2F", "#FFD700", "#000000"},
+	{"#558855", "#447744", "#77884A", "#FFD700", "#000000"},
 	// Inferno
-	{"#884422", "#553322", "#AA4400", "#FFD700", "#000000"},
+	{"#AA5533", "#775544", "#CC6600", "#FFD700", "#000000"},
 	// Abyss
-	{"#443366", "#332255", "#6633AA", "#FFD700", "#000000"},
+	{"#665588", "#554477", "#8855CC", "#FFD700", "#000000"},
 }
 
 // themeBgColors maps [theme][tile] to a background color string.
 // wall, floor, door, stairs, explored-not-visible
 var themeBgColors = [4][5]string{
-	// Stone
-	{"#1a1a1e", "#111114", "#161210", "#111114", "#0a0a0b"},
+	// Stone — walls clearly darker/heavier than floors
+	{"#282830", "#181820", "#201a14", "#181820", "#0e0e12"},
 	// Crypt
-	{"#0e1a0e", "#0a130a", "#0e140a", "#0a130a", "#060a06"},
+	{"#1a2a1a", "#0e1a0e", "#1a2010", "#0e1a0e", "#0a120a"},
 	// Inferno
-	{"#1e0e0a", "#140a08", "#1a0e08", "#140a08", "#0a0605"},
+	{"#2a1810", "#1a100c", "#221408", "#1a100c", "#120c08"},
 	// Abyss
-	{"#14102a", "#0e0a1e", "#120e22", "#0e0a1e", "#080614"},
+	{"#201840", "#14102a", "#1a1430", "#14102a", "#0e0a1e"},
 }
 
 // BgColor returns the background color for this tile in the given theme.
@@ -146,7 +146,7 @@ func (t Tile) ThemedColor(theme Theme) string {
 	case TileWall:
 		return themeColors[idx][0]
 	case TileCrackedWall:
-		return "#887755"
+		return "#aa9966"
 	case TileFloor:
 		return themeColors[idx][1]
 	case TileDoor:
