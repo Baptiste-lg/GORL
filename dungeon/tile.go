@@ -32,6 +32,29 @@ func (t Tile) Glyph() string {
 	}
 }
 
+// GlyphVariant returns a position-seeded glyph variant for visual variety.
+func (t Tile) GlyphVariant(x, y int) string {
+	switch t {
+	case TileFloor:
+		h := (x*7 + y*13) & 15
+		if h == 0 {
+			return ","
+		}
+		if h == 1 {
+			return "`"
+		}
+		return "."
+	case TileWall:
+		h := (x*11 + y*17) & 7
+		if h == 0 {
+			return "+"
+		}
+		return "#"
+	default:
+		return t.Glyph()
+	}
+}
+
 // Theme controls dungeon color palette.
 type Theme int
 
@@ -56,16 +79,61 @@ func ThemeForFloor(floor int) Theme {
 	}
 }
 
-// themeColors maps [theme][tile] to a color string.
+// themeColors maps [theme][tile] to a foreground color string.
 var themeColors = [4][5]string{
 	// Stone: wall, floor, door, stairs, void
-	{"#666666", "#333333", "#8B4513", "#FFD700", "#000000"},
+	{"#666666", "#444444", "#8B4513", "#FFD700", "#000000"},
 	// Crypt
-	{"#446644", "#223322", "#556B2F", "#FFD700", "#000000"},
+	{"#446644", "#335533", "#556B2F", "#FFD700", "#000000"},
 	// Inferno
-	{"#884422", "#331111", "#AA4400", "#FFD700", "#000000"},
+	{"#884422", "#553322", "#AA4400", "#FFD700", "#000000"},
 	// Abyss
-	{"#443366", "#1a0a2e", "#6633AA", "#FFD700", "#000000"},
+	{"#443366", "#332255", "#6633AA", "#FFD700", "#000000"},
+}
+
+// themeBgColors maps [theme][tile] to a background color string.
+// wall, floor, door, stairs, explored-not-visible
+var themeBgColors = [4][5]string{
+	// Stone
+	{"#1a1a1e", "#111114", "#161210", "#111114", "#0a0a0b"},
+	// Crypt
+	{"#0e1a0e", "#0a130a", "#0e140a", "#0a130a", "#060a06"},
+	// Inferno
+	{"#1e0e0a", "#140a08", "#1a0e08", "#140a08", "#0a0605"},
+	// Abyss
+	{"#14102a", "#0e0a1e", "#120e22", "#0e0a1e", "#080614"},
+}
+
+// BgColor returns the background color for this tile in the given theme.
+func (t Tile) BgColor(theme Theme) string {
+	idx := int(theme)
+	if idx < 0 || idx > 3 {
+		idx = 0
+	}
+	switch t {
+	case TileWall, TileCrackedWall:
+		return themeBgColors[idx][0]
+	case TileFloor:
+		return themeBgColors[idx][1]
+	case TileDoor:
+		return themeBgColors[idx][2]
+	case TileStairsDown, TileStairsUp:
+		return themeBgColors[idx][3]
+	default:
+		return "#000000"
+	}
+}
+
+// DimBgColor returns a very dark background for explored-but-not-visible tiles.
+func (t Tile) DimBgColor(theme Theme) string {
+	idx := int(theme)
+	if idx < 0 || idx > 3 {
+		idx = 0
+	}
+	if t == TileVoid {
+		return "#000000"
+	}
+	return themeBgColors[idx][4]
 }
 
 // ThemedColor returns the display color for this tile in a given theme.
