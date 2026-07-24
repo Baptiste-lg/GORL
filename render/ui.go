@@ -1,6 +1,6 @@
 package render
 
-// DrawBox draws an ASCII-bordered box at grid position (col, row) with given dimensions.
+// DrawBox draws a box at grid position (col, row) with filled border cells.
 func (r *Renderer) DrawBox(col, row, w, h int, borderColor, bgColor string) {
 	// Fill background
 	for dy := 0; dy < h; dy++ {
@@ -9,18 +9,21 @@ func (r *Renderer) DrawBox(col, row, w, h int, borderColor, bgColor string) {
 		}
 	}
 
-	// Top and bottom borders
-	r.DrawChar(col, row, "+", borderColor)
-	r.DrawChar(col+w-1, row, "+", borderColor)
-	r.DrawChar(col, row+h-1, "+", borderColor)
-	r.DrawChar(col+w-1, row+h-1, "+", borderColor)
-	for x := 1; x < w-1; x++ {
-		r.DrawChar(col+x, row, "-", borderColor)
-		r.DrawChar(col+x, row+h-1, "-", borderColor)
+	// Filled border cells (top, bottom, left, right edges)
+	for x := 0; x < w; x++ {
+		r.FillCell(col+x, row, borderColor)
+		r.FillCell(col+x, row+h-1, borderColor)
 	}
-	for y := 1; y < h-1; y++ {
-		r.DrawChar(col, row+y, "|", borderColor)
-		r.DrawChar(col+w-1, row+y, "|", borderColor)
+	for y := 0; y < h; y++ {
+		r.FillCell(col, row+y, borderColor)
+		r.FillCell(col+w-1, row+y, borderColor)
+	}
+}
+
+// HighlightRow fills a row of cells with a background color for selection highlighting.
+func (r *Renderer) HighlightRow(col, row, w int, color string) {
+	for x := 0; x < w; x++ {
+		r.FillCell(col+x, row, color)
 	}
 }
 
@@ -85,6 +88,7 @@ func (r *Renderer) DrawInventory(data InventoryData) {
 		y := oy + 9 + i
 		prefix := "  "
 		if i == data.Selected {
+			r.HighlightRow(ox+1, y, boxW-2, "#222233")
 			prefix = "> "
 		}
 		r.DrawText(ox+2, y, prefix+item.Glyph+" "+item.Name, item.Color)
@@ -142,6 +146,7 @@ func (r *Renderer) DrawLevelUp(level int, choices []LevelUpChoice, selected int)
 		prefix := "  "
 		color := "#cccccc"
 		if i == selected {
+			r.HighlightRow(ox+1, y, boxW-2, "#2a2a10")
 			prefix = "> "
 			color = "#FFD700"
 		}
@@ -188,6 +193,10 @@ func (r *Renderer) DrawShop(data ShopData) {
 		if item.Sold {
 			r.DrawText(ox+2, y, prefix+"--- SOLD ---", "#444444")
 			continue
+		}
+
+		if i == data.Selected {
+			r.HighlightRow(ox+1, y, boxW-2, "#1a1a08")
 		}
 
 		nameStr := prefix + item.Glyph + " " + item.Name
@@ -254,6 +263,7 @@ func (r *Renderer) DrawEvent(data EventData) {
 		prefix := "  "
 		color := "#aaaaaa"
 		if i == data.Selected {
+			r.HighlightRow(ox+1, row+i, boxW-2, "#1a1830")
 			prefix = "> "
 			color = "#ffffff"
 		}
