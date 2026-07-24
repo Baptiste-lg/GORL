@@ -1,5 +1,11 @@
 # GORL — Go Roguelike
 
+[![Go](https://img.shields.io/badge/Go-1.23-00ADD8?logo=go&logoColor=white)](https://go.dev/)
+[![WebAssembly](https://img.shields.io/badge/WebAssembly-654FF0?logo=webassembly&logoColor=white)](https://webassembly.org/)
+[![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![CI/CD](https://github.com/Baptiste-lg/GORL/actions/workflows/deploy.yml/badge.svg)](https://github.com/Baptiste-lg/GORL/actions/workflows/deploy.yml)
+
 A browser-based roguelike dungeon crawler written entirely in **Go**, compiled to **WebAssembly** and served via Nginx.
 
 ## [Play Online](https://baptiste-lg.github.io/GORL/)
