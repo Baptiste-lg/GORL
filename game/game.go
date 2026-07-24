@@ -829,9 +829,14 @@ func (g *Game) playerAttack(enemy *Enemy) {
 
 		// Weapon affix: Vampiric (heal 1 HP on kill)
 		if g.player.WeaponHasAffix(AffixVampiric) {
-			healed := g.player.Heal(1)
+			healAmt := 1
+			// Synergy: Bloodthirst (Vampiric+Berserker: heal 3 at low HP)
+			if berserkerActive && HasSynergy(syn, SynBloodthirst) {
+				healAmt = 3
+			}
+			healed := g.player.Heal(healAmt)
 			if healed > 0 {
-				g.particles.SpawnText(g.player.X, g.player.Y, "+1 HP", "#ff4488")
+				g.particles.SpawnText(g.player.X, g.player.Y, "+"+itoa(healed)+" HP", "#ff4488")
 			}
 		}
 
