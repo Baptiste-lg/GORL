@@ -38,6 +38,20 @@ func buildBar(filled, width int, fillChar, emptyChar byte) string {
 
 // DrawHUD renders the heads-up display overlay.
 func (r *Renderer) DrawHUD(d HUDData) {
+	// === HUD background panels ===
+	// Top bar background (rows 0-4)
+	for row := 0; row < 5; row++ {
+		for col := 0; col < GridCols; col++ {
+			r.FillCell(col, row, "#0a0a0e")
+		}
+	}
+	// Bottom bar background (last row)
+	if len(d.Effects) > 0 {
+		for col := 0; col < GridCols; col++ {
+			r.FillCell(col, GridRows-1, "#0a0a0e")
+		}
+	}
+
 	// === Top-left: HP bar ===
 	r.DrawText(1, 0, "HP", "#ff4444")
 	barW := 20
@@ -70,15 +84,21 @@ func (r *Renderer) DrawHUD(d HUDData) {
 
 	// === Active item (row 3, right-aligned) ===
 	if d.ActiveName != "" {
-		color := "#888888"
-		label := "[Q] " + d.ActiveName
+		label := "[Q] " + d.ActiveName + " "
+		barStart := GridCols - len(label) - 12
+		r.DrawText(barStart, 3, label, "#aaaaaa")
+		// Visual charge bar (10 chars wide)
+		chargeFilled := d.ActivePct / 10
 		if d.ActiveReady {
-			color = "#44ffaa"
-			label += " READY!"
+			r.DrawText(barStart+len(label), 3, buildBar(10, 10, '=', '='), "#44ffaa")
+			r.DrawText(barStart+len(label)+12, 3, "READY!", "#44ffaa")
 		} else {
-			label += " " + intToStr(d.ActivePct) + "%"
+			chargeColor := "#886600"
+			if d.ActivePct >= 80 {
+				chargeColor = "#ccaa00"
+			}
+			r.DrawText(barStart+len(label), 3, buildBar(chargeFilled, 10, '|', ' '), chargeColor)
 		}
-		r.DrawText(GridCols-len(label)-1, 3, label, color)
 	}
 
 	// === Kill streak ===
