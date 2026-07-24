@@ -11,6 +11,7 @@ type StatusEffect struct {
 type Player struct {
 	*Entity
 	Inventory    *Inventory
+	Active       *ActiveItem
 	Gold         int
 	MoveCooldown float64 // seconds remaining until next move
 	LastCombat   float64 // seconds since last combat (for HP regen)
@@ -40,10 +41,14 @@ func (p *Player) ResetMoveCooldown() {
 	if p.HasEffect(ScrollSpeed) {
 		cd /= 2
 	}
+	// Weapon affix: Swift (-20% move cooldown)
+	if p.WeaponHasAffix(AffixSwift) {
+		cd *= 0.80
+	}
 	p.MoveCooldown = cd
 }
 
-// EffectiveStats returns stats with equipment bonuses applied.
+// EffectiveStats returns stats with equipment bonuses and armor affixes applied.
 func (p *Player) EffectiveStats() Stats {
 	s := p.Stats
 	str, dex, vit, lck := p.Inventory.EquipBonuses()
@@ -51,7 +56,30 @@ func (p *Player) EffectiveStats() Stats {
 	s.DEX += dex
 	s.VIT += vit
 	s.LCK += lck
+
+	// Armor affixes
+	if a := p.Inventory.Armor; a != nil {
+		if HasAffix(a.Affixes, AffixFortified) {
+			s.VIT += s.VIT / 4 // +25% VIT
+		}
+	}
 	return s
+}
+
+// WeaponHasAffix returns true if the equipped weapon has the given affix.
+func (p *Player) WeaponHasAffix(id AffixID) bool {
+	if w := p.Inventory.Weapon; w != nil {
+		return HasAffix(w.Affixes, id)
+	}
+	return false
+}
+
+// ArmorHasAffix returns true if the equipped armor has the given affix.
+func (p *Player) ArmorHasAffix(id AffixID) bool {
+	if a := p.Inventory.Armor; a != nil {
+		return HasAffix(a.Affixes, id)
+	}
+	return false
 }
 
 // UseItem uses a consumable item at the given inventory index.
