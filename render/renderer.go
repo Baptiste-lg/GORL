@@ -160,15 +160,15 @@ func (r *Renderer) DrawDungeonThemed(dm *dungeon.DungeonMap, fov *dungeon.FOV, t
 // dimColor returns a darker version of a hex color for explored-but-not-visible tiles.
 func dimColor(hex string) string {
 	if len(hex) != 7 {
-		return "#111111"
+		return "#222222"
 	}
-	// Simple approach: halve each component and halve again
 	r := hexVal(hex[1])<<4 + hexVal(hex[2])
 	g := hexVal(hex[3])<<4 + hexVal(hex[4])
 	b := hexVal(hex[5])<<4 + hexVal(hex[6])
-	r /= 3
-	g /= 3
-	b /= 3
+	// Dim to 40% — visible but clearly darker than lit areas
+	r = r * 2 / 5
+	g = g * 2 / 5
+	b = b * 2 / 5
 	return "#" + hexByte(r) + hexByte(g) + hexByte(b)
 }
 
