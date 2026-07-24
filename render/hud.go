@@ -2,13 +2,16 @@ package render
 
 // HUDData holds everything the HUD needs to display.
 type HUDData struct {
-	HP, MaxHP  int
-	Level      int
-	XP, XPNext int
-	Floor      int
-	Gold       int
-	Effects    []HUDEffect
-	Streak     string // kill streak label (empty if none)
+	HP, MaxHP   int
+	Level       int
+	XP, XPNext  int
+	Floor       int
+	Gold        int
+	ActiveName  string // active item name (empty if none)
+	ActiveReady bool   // true if fully charged
+	ActivePct   int    // charge percentage 0-100
+	Effects     []HUDEffect
+	Streak      string // kill streak label (empty if none)
 }
 
 // HUDEffect is a status effect shown in the HUD.
@@ -67,9 +70,22 @@ func (r *Renderer) DrawHUD(d HUDData) {
 	r.DrawText(GridCols-len(levelStr)-1, 1, levelStr, "#ffffff")
 	r.DrawText(GridCols-len(goldStr)-1, 2, goldStr, "#FFD700")
 
+	// === Active item (row 3, right-aligned) ===
+	if d.ActiveName != "" {
+		color := "#888888"
+		label := "[Q] " + d.ActiveName
+		if d.ActiveReady {
+			color = "#44ffaa"
+			label += " READY!"
+		} else {
+			label += " " + intToStr(d.ActivePct) + "%"
+		}
+		r.DrawText(GridCols-len(label)-1, 3, label, color)
+	}
+
 	// === Kill streak ===
 	if d.Streak != "" {
-		r.DrawText((GridCols-len(d.Streak))/2, 3, d.Streak, "#ff8800")
+		r.DrawText((GridCols-len(d.Streak))/2, 4, d.Streak, "#ff8800")
 	}
 
 	// === Bottom: status effects ===
