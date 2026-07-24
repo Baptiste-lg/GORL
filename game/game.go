@@ -1531,7 +1531,7 @@ func (g *Game) renderGameWorld(playerMaxHP int) {
 		vx := s.X - g.renderer.CamX
 		vy := s.Y - g.renderer.CamY
 		if vx >= 0 && vx < render.ViewTilesX && vy >= 0 && vy < render.ViewTilesY {
-			g.renderer.FillTileBg(vx, vy, "#1a1808")
+			g.renderer.FillTileBg(vx, vy, "#28220e")
 			col := vx*render.TileCells + 1
 			row := vy*render.TileCells + 1
 			g.renderer.DrawChar(col, row, "S", "#FFD700")
@@ -1560,7 +1560,7 @@ func (g *Game) renderGameWorld(playerMaxHP int) {
 			vy := shrine.Y - g.renderer.CamY
 			if vx >= 0 && vx < render.ViewTilesX && vy >= 0 && vy < render.ViewTilesY {
 				if !shrine.Used {
-					g.renderer.FillTileBg(vx, vy, "#141014")
+					g.renderer.FillTileBg(vx, vy, "#221828")
 				}
 				col := vx*render.TileCells + 1
 				row := vy*render.TileCells + 1
@@ -1607,8 +1607,8 @@ func (g *Game) renderGameWorld(playerMaxHP int) {
 			if vx >= 0 && vx < render.ViewTilesX && vy >= 0 && vy < render.ViewTilesY {
 				col := vx*render.TileCells + 1
 				row := vy*render.TileCells + 1
-				// Subtle glow behind item
-				g.renderer.FillCell(col, row, "#18180a")
+				// Glow behind item
+				g.renderer.FillCell(col, row, "#2a2810")
 				g.renderer.DrawChar(col, row, item.Glyph(), item.Rarity.Color())
 			}
 		}
@@ -1621,9 +1621,9 @@ func (g *Game) renderGameWorld(playerMaxHP int) {
 		}
 		sprite := render.Sprites[e.Sprite]
 		if sprite != nil {
-			bgTint := "#1a0a0a" // dark red tint for enemies
+			bgTint := "#2a1515" // visible dark red tint for enemies
 			if e.Type.IsBoss() {
-				bgTint = "#2a0a0a" // stronger for bosses
+				bgTint = "#3a1010" // stronger for bosses
 			}
 			g.renderer.DrawSpriteWithBg(sprite, 0, e.X, e.Y, sprite.Color, bgTint)
 		}
@@ -1637,7 +1637,7 @@ func (g *Game) renderGameWorld(playerMaxHP int) {
 			hpRatio = float64(g.player.Stats.HP) / float64(playerMaxHP)
 		}
 		color := render.HPColor(sprite.Color, hpRatio)
-		g.renderer.DrawSpriteWithBg(sprite, 0, g.player.X, g.player.Y, color, "#0a1a0a")
+		g.renderer.DrawSpriteWithBg(sprite, 0, g.player.X, g.player.Y, color, "#152a15")
 	}
 
 	g.particles.Draw(g.renderer)
