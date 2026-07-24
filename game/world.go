@@ -194,12 +194,12 @@ func (w *World) spawnEnemies(rng *rand.Rand) {
 }
 
 // UpdateEnemies ticks all living enemies.
-func (w *World) UpdateEnemies(dt float64, playerX, playerY int) {
+func (w *World) UpdateEnemies(dt float64, playerX, playerY, detectRange int) {
 	for _, e := range w.Enemies {
 		if !e.IsAlive {
 			continue
 		}
-		e.Update(dt, playerX, playerY, func(x, y int) bool {
+		e.Update(dt, playerX, playerY, detectRange, func(x, y int) bool {
 			if !w.Dungeon.Map.At(x, y).Passable() {
 				return false
 			}
