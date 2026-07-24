@@ -119,10 +119,14 @@ func (p *Player) UseItem(idx int) bool {
 }
 
 // AddEffect adds a status effect (refreshes if same kind exists).
+// For effects with Magnitude (stat buffs), the old magnitude is reversed before applying the new one.
 func (p *Player) AddEffect(eff StatusEffect) {
 	for i := range p.Effects {
 		if p.Effects[i].Kind == eff.Kind {
+			// Reverse old stat buff before refreshing
+			p.onEffectExpired(p.Effects[i])
 			p.Effects[i].Remaining = eff.Remaining
+			p.Effects[i].Magnitude = eff.Magnitude
 			return
 		}
 	}
