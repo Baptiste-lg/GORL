@@ -80,11 +80,12 @@ func NewActiveItem(id ActiveID) *ActiveItem {
 	}
 }
 
+var allActiveIDs = []ActiveID{
+	ActiveDash, ActiveFireball, ActiveFreeze, ActiveHealBurst,
+	ActiveShieldWall, ActivePoisonCloud, ActiveBlink, ActiveWarCry,
+}
+
 // RandomActiveID picks a random active item type.
 func RandomActiveID(rng interface{ Intn(int) int }) ActiveID {
-	ids := []ActiveID{
-		ActiveDash, ActiveFireball, ActiveFreeze, ActiveHealBurst,
-		ActiveShieldWall, ActivePoisonCloud, ActiveBlink, ActiveWarCry,
-	}
-	return ids[rng.Intn(len(ids))]
+	return allActiveIDs[rng.Intn(len(allActiveIDs))]
 }
