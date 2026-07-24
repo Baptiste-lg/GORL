@@ -20,6 +20,22 @@ type HUDEffect struct {
 	Remaining float64
 }
 
+// barBuf is reused to build bar strings without allocating per frame.
+var barBuf [22]byte // "[" + 20 chars + "]"
+
+func buildBar(filled, width int, fillChar, emptyChar byte) string {
+	barBuf[0] = '['
+	for i := 0; i < width; i++ {
+		if i < filled {
+			barBuf[1+i] = fillChar
+		} else {
+			barBuf[1+i] = emptyChar
+		}
+	}
+	barBuf[1+width] = ']'
+	return string(barBuf[:2+width])
+}
+
 // DrawHUD renders the heads-up display overlay.
 func (r *Renderer) DrawHUD(d HUDData) {
 	// === Top-left: HP bar ===
@@ -29,16 +45,7 @@ func (r *Renderer) DrawHUD(d HUDData) {
 	if d.MaxHP > 0 {
 		filled = d.HP * barW / d.MaxHP
 	}
-	bar := "["
-	for i := 0; i < barW; i++ {
-		if i < filled {
-			bar += "|"
-		} else {
-			bar += " "
-		}
-	}
-	bar += "]"
-	r.DrawText(4, 0, bar, "#ff4444")
+	r.DrawText(4, 0, buildBar(filled, barW, '|', ' '), "#ff4444")
 	r.DrawText(26, 0, intToStr(d.HP)+"/"+intToStr(d.MaxHP), "#ff8888")
 
 	// === Top-left row 2: XP bar ===
@@ -50,16 +57,7 @@ func (r *Renderer) DrawHUD(d HUDData) {
 			xpFilled = barW
 		}
 	}
-	xpBar := "["
-	for i := 0; i < barW; i++ {
-		if i < xpFilled {
-			xpBar += ":"
-		} else {
-			xpBar += " "
-		}
-	}
-	xpBar += "]"
-	r.DrawText(4, 1, xpBar, "#FFD700")
+	r.DrawText(4, 1, buildBar(xpFilled, barW, ':', ' '), "#FFD700")
 	r.DrawText(26, 1, intToStr(d.XP)+"/"+intToStr(d.XPNext), "#ccaa00")
 
 	// === Top-right: Floor, Level, Gold ===
