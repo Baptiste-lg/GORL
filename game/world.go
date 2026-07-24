@@ -14,6 +14,7 @@ type World struct {
 	Hazards          []*Hazard
 	Shrines          []*Shrine
 	Shop             *Shop
+	DangerTiles      []DangerTile // telegraphed boss attack zones
 	Floor            int
 	RoomRoles        map[int]RoomRole
 	GroundItems      []*Item // items placed by room generation
