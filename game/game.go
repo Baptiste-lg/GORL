@@ -1531,6 +1531,7 @@ func (g *Game) renderGameWorld(playerMaxHP int) {
 		vx := s.X - g.renderer.CamX
 		vy := s.Y - g.renderer.CamY
 		if vx >= 0 && vx < render.ViewTilesX && vy >= 0 && vy < render.ViewTilesY {
+			g.renderer.FillTileBg(vx, vy, "#1a1808")
 			col := vx*render.TileCells + 1
 			row := vy*render.TileCells + 1
 			g.renderer.DrawChar(col, row, "S", "#FFD700")
@@ -1558,6 +1559,9 @@ func (g *Game) renderGameWorld(playerMaxHP int) {
 			vx := shrine.X - g.renderer.CamX
 			vy := shrine.Y - g.renderer.CamY
 			if vx >= 0 && vx < render.ViewTilesX && vy >= 0 && vy < render.ViewTilesY {
+				if !shrine.Used {
+					g.renderer.FillTileBg(vx, vy, "#141014")
+				}
 				col := vx*render.TileCells + 1
 				row := vy*render.TileCells + 1
 				g.renderer.DrawChar(col, row, shrine.Glyph(), shrine.Color())
@@ -1603,6 +1607,8 @@ func (g *Game) renderGameWorld(playerMaxHP int) {
 			if vx >= 0 && vx < render.ViewTilesX && vy >= 0 && vy < render.ViewTilesY {
 				col := vx*render.TileCells + 1
 				row := vy*render.TileCells + 1
+				// Subtle glow behind item
+				g.renderer.FillCell(col, row, "#18180a")
 				g.renderer.DrawChar(col, row, item.Glyph(), item.Rarity.Color())
 			}
 		}
@@ -1615,7 +1621,11 @@ func (g *Game) renderGameWorld(playerMaxHP int) {
 		}
 		sprite := render.Sprites[e.Sprite]
 		if sprite != nil {
-			g.renderer.DrawSprite(sprite, 0, e.X, e.Y, sprite.Color)
+			bgTint := "#1a0a0a" // dark red tint for enemies
+			if e.Type.IsBoss() {
+				bgTint = "#2a0a0a" // stronger for bosses
+			}
+			g.renderer.DrawSpriteWithBg(sprite, 0, e.X, e.Y, sprite.Color, bgTint)
 		}
 	}
 
@@ -1627,7 +1637,7 @@ func (g *Game) renderGameWorld(playerMaxHP int) {
 			hpRatio = float64(g.player.Stats.HP) / float64(playerMaxHP)
 		}
 		color := render.HPColor(sprite.Color, hpRatio)
-		g.renderer.DrawSprite(sprite, 0, g.player.X, g.player.Y, color)
+		g.renderer.DrawSpriteWithBg(sprite, 0, g.player.X, g.player.Y, color, "#0a1a0a")
 	}
 
 	g.particles.Draw(g.renderer)
