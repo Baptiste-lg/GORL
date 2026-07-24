@@ -147,12 +147,18 @@ func hasAllAffixes(have []AffixID, need []AffixID) bool {
 	return true
 }
 
+var synergyIndex map[SynergyID]int // lazy-init index
+
 // SynergyByID returns the synergy definition, or nil if not found.
 func SynergyByID(id SynergyID) *Synergy {
-	for i := range AllSynergies {
-		if AllSynergies[i].ID == id {
-			return &AllSynergies[i]
+	if synergyIndex == nil {
+		synergyIndex = make(map[SynergyID]int, len(AllSynergies))
+		for i := range AllSynergies {
+			synergyIndex[AllSynergies[i].ID] = i
 		}
+	}
+	if idx, ok := synergyIndex[id]; ok {
+		return &AllSynergies[idx]
 	}
 	return nil
 }
