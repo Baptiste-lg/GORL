@@ -83,11 +83,16 @@ func RollAffixes(rng *rand.Rand, itemType ItemType, rarity Rarity) []AffixID {
 		return nil
 	}
 
-	// Pick unique affixes from pool
-	perm := rng.Perm(len(pool))
+	// Pick unique affixes via partial Fisher-Yates (no full perm allocation)
+	indices := make([]int, len(pool))
+	for i := range indices {
+		indices[i] = i
+	}
 	result := make([]AffixID, 0, count)
-	for i := 0; i < count && i < len(perm); i++ {
-		result = append(result, pool[perm[i]])
+	for i := 0; i < count && i < len(indices); i++ {
+		j := i + rng.Intn(len(indices)-i)
+		indices[i], indices[j] = indices[j], indices[i]
+		result = append(result, pool[indices[i]])
 	}
 	return result
 }
