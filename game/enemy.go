@@ -184,8 +184,8 @@ func PickEnemyType(floor int, rng *rand.Rand) EnemyType {
 	return EnemyRat
 }
 
-// Update ticks enemy timers and runs AI.
-func (e *Enemy) Update(dt float64, playerX, playerY int, passable func(x, y int) bool) {
+// Update ticks enemy timers and runs AI. detectRange controls how far enemies can see the player.
+func (e *Enemy) Update(dt float64, playerX, playerY, detectRange int, passable func(x, y int) bool) {
 	e.ActionTimer -= dt
 	if e.ActionTimer > 0 {
 		return
@@ -196,22 +196,21 @@ func (e *Enemy) Update(dt float64, playerX, playerY int, passable func(x, y int)
 
 	switch e.AI {
 	case AIPatrol:
-		e.updatePatrol(playerX, playerY, passable)
+		e.updatePatrol(playerX, playerY, detectRange, passable)
 	case AIChase:
 		e.updateChase(playerX, playerY, passable)
 	case AIFlee:
 		e.updateFlee(playerX, playerY, passable)
 	case AIIdle:
-		// Check if player is nearby to switch to chase
-		if e.distTo(playerX, playerY) <= 6 {
+		if e.distTo(playerX, playerY) <= detectRange {
 			e.AI = AIChase
 		}
 	}
 }
 
-func (e *Enemy) updatePatrol(playerX, playerY int, passable func(x, y int) bool) {
+func (e *Enemy) updatePatrol(playerX, playerY, detectRange int, passable func(x, y int) bool) {
 	// Check for player in detection range
-	if e.distTo(playerX, playerY) <= 6 {
+	if e.distTo(playerX, playerY) <= detectRange {
 		e.AI = AIChase
 		return
 	}
