@@ -65,6 +65,7 @@ type Item struct {
 	BonusDEX   int
 	BonusVIT   int
 	BonusLCK   int
+	Affixes    []AffixID
 	ScrollKind ScrollKind
 	// World position (0,0 if in inventory)
 	X, Y int
@@ -145,12 +146,18 @@ func FloorRarityBonus(floor int) float64 {
 func GenerateWeapon(rng *rand.Rand, floor int) *Item {
 	rarity := RollRarity(rng, FloorRarityBonus(floor))
 	bonus := int(rarity) + 1 + rng.Intn(int(rarity)+1)
+	affixes := RollAffixes(rng, ItemWeapon, rarity)
+	name := genWeaponName(rng, rarity)
+	if len(affixes) > 0 {
+		name = AffixNames(affixes) + " " + name
+	}
 	return &Item{
-		Name:     genWeaponName(rng, rarity),
+		Name:     name,
 		Type:     ItemWeapon,
 		Rarity:   rarity,
 		BonusSTR: bonus,
 		BonusDEX: rng.Intn(int(rarity) + 1),
+		Affixes:  affixes,
 	}
 }
 
@@ -158,12 +165,18 @@ func GenerateWeapon(rng *rand.Rand, floor int) *Item {
 func GenerateArmor(rng *rand.Rand, floor int) *Item {
 	rarity := RollRarity(rng, FloorRarityBonus(floor))
 	bonus := int(rarity) + 1 + rng.Intn(int(rarity)+1)
+	affixes := RollAffixes(rng, ItemArmor, rarity)
+	name := genArmorName(rng, rarity)
+	if len(affixes) > 0 {
+		name = AffixNames(affixes) + " " + name
+	}
 	return &Item{
-		Name:     genArmorName(rng, rarity),
+		Name:     name,
 		Type:     ItemArmor,
 		Rarity:   rarity,
 		BonusVIT: bonus,
 		BonusDEX: rng.Intn(int(rarity) + 1),
+		Affixes:  affixes,
 	}
 }
 
