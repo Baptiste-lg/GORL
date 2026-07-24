@@ -198,6 +198,8 @@ func (g *Game) handleKeyDown(key string) {
 			g.audioEngine.ToggleMute()
 		case "e", "E", "Enter":
 			g.interact()
+		case "q", "Q":
+			g.useActiveItem()
 		}
 	case StateInventory:
 		g.handleInventoryKey(key)
@@ -336,6 +338,136 @@ func (g *Game) interact() {
 		g.sfx.Death()
 		g.renderer.Shake(10.0, 0.5)
 		g.state = StateDead
+	}
+}
+
+func (g *Game) useActiveItem() {
+	a := g.player.Active
+	if a == nil {
+		g.particles.SpawnText(g.player.X, g.player.Y, "No active item", "#555555")
+		return
+	}
+	if !a.Use() {
+		g.particles.SpawnText(g.player.X, g.player.Y, "Not charged!", "#ff4444")
+		return
+	}
+
+	g.sfx.Pickup()
+	px, py := g.player.X, g.player.Y
+
+	switch a.ID {
+	case ActiveHealBurst:
+		healAmt := g.player.EffectiveStats().MaxHP() * 40 / 100
+		healed := g.player.Heal(healAmt)
+		g.particles.SpawnText(px, py, "+"+itoa(healed)+" HP", "#44ff44")
+
+	case ActiveShieldWall:
+		g.player.AddEffect(StatusEffect{
+			Name: "Shield Wall", Remaining: 8.0, Kind: ScrollShield,
+		})
+		g.particles.SpawnText(px, py, "SHIELD WALL!", "#4488ff")
+
+	case ActiveWarCry:
+		g.player.Stats.STR += 5
+		g.particles.SpawnText(px, py, "WAR CRY! +5 STR", "#ff8800")
+		// STR bonus wears off — handled as temporary effect
+		g.player.AddEffect(StatusEffect{
+			Name: "War Cry", Remaining: 6.0, Kind: ScrollKind(101),
+		})
+
+	case ActiveFreeze:
+		count := 0
+		for _, e := range g.world.Enemies {
+			if e.IsAlive && g.fov.IsVisible(e.X, e.Y) {
+				e.ActionTimer += 2.0
+				count++
+			}
+		}
+		g.particles.SpawnText(px, py, "FREEZE! ("+itoa(count)+")", "#44aaff")
+
+	case ActiveFireball:
+		// Damage enemies in a 3-tile line from player in last move direction
+		dx, dy := 0, 0
+		if g.keys["w"] || g.keys["ArrowUp"] {
+			dy = -1
+		} else if g.keys["s"] || g.keys["ArrowDown"] {
+			dy = 1
+		} else if g.keys["a"] || g.keys["ArrowLeft"] {
+			dx = -1
+		} else if g.keys["d"] || g.keys["ArrowRight"] {
+			dx = 1
+		}
+		if dx == 0 && dy == 0 {
+			dy = -1 // default: up
+		}
+		for i := 1; i <= 3; i++ {
+			tx, ty := px+dx*i, py+dy*i
+			if !g.dungeonResult.Map.At(tx, ty).Passable() {
+				break
+			}
+			if e := g.world.EnemyAt(tx, ty); e != nil {
+				e.Entity.TakeDamage(15)
+				g.particles.SpawnDamage(tx, ty, 15, "#ff4400")
+				if !e.IsAlive {
+					g.killCount++
+				}
+			}
+			g.particles.SpawnText(tx, ty, "*", "#ff4400")
+		}
+		g.renderer.Shake(4.0, 0.2)
+
+	case ActivePoisonCloud:
+		dirs := [][2]int{{0, -1}, {0, 1}, {-1, 0}, {1, 0}, {-1, -1}, {-1, 1}, {1, -1}, {1, 1}}
+		for _, d := range dirs {
+			tx, ty := px+d[0], py+d[1]
+			if e := g.world.EnemyAt(tx, ty); e != nil {
+				e.Entity.TakeDamage(3)
+				e.ActionTimer += 1.0
+				g.particles.SpawnText(tx, ty, "POISON!", "#44aa44")
+			}
+		}
+		g.particles.SpawnText(px, py, "POISON CLOUD!", "#44aa44")
+
+	case ActiveDash:
+		dx, dy := 0, 0
+		if g.keys["w"] || g.keys["ArrowUp"] {
+			dy = -1
+		} else if g.keys["s"] || g.keys["ArrowDown"] {
+			dy = 1
+		} else if g.keys["a"] || g.keys["ArrowLeft"] {
+			dx = -1
+		} else if g.keys["d"] || g.keys["ArrowRight"] {
+			dx = 1
+		}
+		if dx == 0 && dy == 0 {
+			dy = -1
+		}
+		for i := 1; i <= 3; i++ {
+			tx, ty := px+dx*i, py+dy*i
+			if !g.dungeonResult.Map.At(tx, ty).Passable() || g.world.EnemyAt(tx, ty) != nil {
+				break
+			}
+			g.player.X = tx
+			g.player.Y = ty
+		}
+		g.renderer.CenterCamera(g.player.X, g.player.Y)
+		g.fov.Compute(g.dungeonResult.Map, g.player.X, g.player.Y, fovRadius)
+		g.particles.SpawnText(g.player.X, g.player.Y, "DASH!", "#44aaff")
+
+	case ActiveBlink:
+		dm := g.dungeonResult.Map
+		for attempts := 0; attempts < 100; attempts++ {
+			tx := g.rng.Intn(dungeon.MapWidth)
+			ty := g.rng.Intn(dungeon.MapHeight)
+			if dm.At(tx, ty).Passable() && g.fov.IsExplored(tx, ty) && g.world.EnemyAt(tx, ty) == nil {
+				g.player.X = tx
+				g.player.Y = ty
+				g.renderer.CenterCamera(tx, ty)
+				g.fov.Compute(dm, tx, ty, fovRadius)
+				break
+			}
+		}
+		g.particles.SpawnText(g.player.X, g.player.Y, "BLINK!", "#cc44ff")
 	}
 }
 
@@ -524,7 +656,12 @@ func (g *Game) checkTraps() {
 
 func (g *Game) processHazards(dt float64) {
 	hazards := g.world.HazardsAt(g.player.X, g.player.Y)
+	fireproof := g.player.ArmorHasAffix(AffixFireproof)
 	for _, h := range hazards {
+		// Fireproof armor negates fire/lava
+		if fireproof && h.Type == HazardLava {
+			continue
+		}
 		h.DmgAccum += h.DPS * dt
 		if h.DmgAccum >= 1.0 {
 			dmg := int(h.DmgAccum)
@@ -567,6 +704,22 @@ func (g *Game) pickupItems() {
 func (g *Game) playerAttack(enemy *Enemy) {
 	attacker := *g.player.Entity
 	attacker.Stats = g.player.EffectiveStats()
+
+	// Weapon affix: Berserker (+50% damage below 30% HP)
+	berserkerActive := false
+	if g.player.WeaponHasAffix(AffixBerserker) {
+		maxHP := g.player.EffectiveStats().MaxHP()
+		if maxHP > 0 && float64(g.player.Stats.HP)/float64(maxHP) < 0.30 {
+			attacker.Stats.STR += attacker.Stats.STR / 2
+			berserkerActive = true
+		}
+	}
+
+	// Weapon affix: Lucky (+5% crit — applied via stats)
+	if g.player.WeaponHasAffix(AffixLucky) {
+		attacker.Stats.LCK += 3 // +6% crit (3 * 0.02)
+	}
+
 	result := ResolveAttack(&attacker, enemy.Entity, g.rng)
 	g.player.LastCombat = 0
 
@@ -575,12 +728,49 @@ func (g *Game) playerAttack(enemy *Enemy) {
 		g.sfx.Miss()
 		return
 	}
+
+	// Weapon affix: Burning (+3 fire damage)
+	if g.player.WeaponHasAffix(AffixBurning) && !result.IsDodge {
+		bonus := enemy.Entity.TakeDamage(3)
+		result.Damage += bonus
+		g.particles.SpawnText(enemy.X, enemy.Y, "+3 fire", "#ff4400")
+	}
+
+	// Weapon affix: Executioner (double damage to enemies below 25% HP)
+	if g.player.WeaponHasAffix(AffixExecutioner) && !result.IsDeath {
+		maxHP := enemy.Stats.MaxHP()
+		if maxHP > 0 && float64(enemy.Stats.HP)/float64(maxHP) < 0.25 {
+			bonus := enemy.Entity.TakeDamage(result.Damage) // deal same damage again
+			result.Damage += bonus
+			g.particles.SpawnText(enemy.X, enemy.Y, "EXECUTE!", "#cc0000")
+		}
+	}
+
+	// Weapon affix: Freezing (15% chance to stun)
+	if g.player.WeaponHasAffix(AffixFreezing) && g.rng.Intn(100) < 15 {
+		enemy.ActionTimer += 2.0 // skip ~2 seconds of actions
+		g.particles.SpawnText(enemy.X, enemy.Y, "FROZEN!", "#44aaff")
+	}
+
+	// Weapon affix: Venomous (20% chance to poison)
+	if g.player.WeaponHasAffix(AffixVenomous) && g.rng.Intn(100) < 20 {
+		// Mark enemy as poisoned via action timer penalty + direct damage
+		enemy.Entity.TakeDamage(2)
+		g.particles.SpawnText(enemy.X, enemy.Y, "POISON!", "#44aa44")
+	}
+
+	result.IsDeath = !enemy.IsAlive
+
 	if result.IsCrit {
 		g.particles.SpawnCrit(enemy.X, enemy.Y, result.Damage)
 		g.sfx.CritHit()
 	} else {
 		g.particles.SpawnDamage(enemy.X, enemy.Y, result.Damage, "#ffffff")
 		g.sfx.Hit()
+	}
+
+	if berserkerActive {
+		g.particles.SpawnText(g.player.X, g.player.Y, "BERSERK!", "#ff4400")
 	}
 
 	if result.IsDeath {
@@ -600,17 +790,35 @@ func (g *Game) playerAttack(enemy *Enemy) {
 			g.particles.SpawnText(g.player.X, g.player.Y, g.streak.Label(), "#ff8800")
 		}
 
+		// Weapon affix: Vampiric (heal 1 HP on kill)
+		if g.player.WeaponHasAffix(AffixVampiric) {
+			healed := g.player.Heal(1)
+			if healed > 0 {
+				g.particles.SpawnText(g.player.X, g.player.Y, "+1 HP", "#ff4488")
+			}
+		}
+
+		// Charge active item on kill
+		if g.player.Active != nil && !g.player.Active.Ready() {
+			g.player.Active.AddCharge()
+		}
+
 		// Gold drop (always)
 		goldAmt := goldForKill(enemy.BaseXP, g.floor, g.rng)
 		g.player.Gold += goldAmt
 		g.particles.SpawnText(enemy.X, enemy.Y-1, "+"+itoa(goldAmt)+"g", "#ccaa00")
 
-		// Boss drops guaranteed rare+ loot
+		// Boss drops guaranteed rare+ loot + active item
 		if enemy.Type.IsBoss() {
 			loot := GenerateLoot(g.rng, g.floor+5)
 			loot.X = enemy.X
 			loot.Y = enemy.Y
 			g.groundItems = append(g.groundItems, loot)
+
+			// Boss always drops an active item
+			newActive := NewActiveItem(RandomActiveID(g.rng))
+			g.player.Active = newActive
+			g.particles.SpawnText(g.player.X, g.player.Y, "Active: "+newActive.Name+"!", "#cc44ff")
 		} else if g.rng.Float64() < lootDropRate {
 			loot := GenerateLoot(g.rng, g.floor)
 			loot.X = enemy.X
@@ -627,11 +835,41 @@ func (g *Game) enemyAttackPlayer(enemy *Enemy) {
 		defender.Stats.VIT += defender.Stats.VIT / 2
 	}
 
+	// Armor affix: Evasion (+5% dodge via stats)
+	if g.player.ArmorHasAffix(AffixEvasion) {
+		defender.Stats.DEX += 3 // +4.5% dodge (3 * 0.015)
+	}
+
 	result := ResolveAttack(enemy.Entity, &defender, g.rng)
+
 	if !result.IsDodge {
-		g.player.Entity.TakeDamage(result.Damage)
+		dmg := result.Damage
+
+		// Armor affix: Bulwark (reduce all damage by 1)
+		if g.player.ArmorHasAffix(AffixBulwark) && dmg > 1 {
+			dmg--
+		}
+
+		// Armor affix: Absorbing (10% chance to heal instead)
+		if g.player.ArmorHasAffix(AffixAbsorbing) && g.rng.Intn(100) < 10 {
+			g.player.Heal(dmg)
+			g.particles.SpawnText(g.player.X, g.player.Y, "ABSORB!", "#44ffaa")
+			dmg = 0
+		}
+
+		if dmg > 0 {
+			g.player.Entity.TakeDamage(dmg)
+		}
 	}
 	g.player.LastCombat = 0
+
+	// Armor affix: Thorns (reflect 2 damage)
+	if !result.IsDodge && g.player.ArmorHasAffix(AffixThorns) {
+		thornDmg := enemy.Entity.TakeDamage(2)
+		if thornDmg > 0 {
+			g.particles.SpawnDamage(enemy.X, enemy.Y, thornDmg, "#aa4444")
+		}
+	}
 
 	if result.IsDodge {
 		g.particles.SpawnMiss(g.player.X, g.player.Y)
@@ -718,7 +956,11 @@ func (g *Game) Update(dt float64) {
 	case StatePlaying:
 		g.player.Update(dt)
 		g.processMovement()
-		g.world.UpdateEnemies(dt, g.player.X, g.player.Y)
+		detectRange := 6
+		if g.player.ArmorHasAffix(AffixStealth) {
+			detectRange = 4
+		}
+		g.world.UpdateEnemies(dt, g.player.X, g.player.Y, detectRange)
 		g.processEnemyCombat()
 		g.world.RemoveDead()
 		g.checkChallengeCleared()
@@ -754,6 +996,13 @@ func (g *Game) Render() {
 			Floor:  g.floor,
 			Gold:   g.player.Gold,
 			Streak: g.streak.Label(),
+		}
+		if a := g.player.Active; a != nil {
+			hudData.ActiveName = a.Name
+			hudData.ActiveReady = a.Ready()
+			if a.MaxCharges > 0 {
+				hudData.ActivePct = a.Charges * 100 / a.MaxCharges
+			}
 		}
 		for _, eff := range g.player.Effects {
 			hudData.Effects = append(hudData.Effects, render.HUDEffect{
