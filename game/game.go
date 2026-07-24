@@ -60,6 +60,9 @@ type Game struct {
 	// Event state
 	eventState *EventState
 
+	// Cached per-floor
+	cachedMarkers []render.MiniMapMarker
+
 	// Loadout selection
 	selectedLoadout int
 }
@@ -127,6 +130,7 @@ func (g *Game) generateFloor() {
 
 	g.renderer.CenterCamera(g.player.X, g.player.Y)
 	g.fov.Compute(g.dungeonResult.Map, g.player.X, g.player.Y, fovRadius)
+	g.cachedMarkers = g.buildMiniMapMarkers()
 }
 
 func (g *Game) nextFloor() {
@@ -322,6 +326,7 @@ func (g *Game) checkChallengeCleared() {
 		g.groundItems = append(g.groundItems, loot)
 		g.particles.SpawnText(cx, cy, "CHALLENGE CLEARED!", "#FFD700")
 		g.sfx.LevelUp()
+		g.cachedMarkers = g.buildMiniMapMarkers() // refresh marker color
 	}
 }
 
@@ -1400,13 +1405,14 @@ func (g *Game) Render() {
 		g.renderMenu()
 
 	case StatePlaying, StateInventory, StateLevelUp, StatePaused, StateShop:
-		g.renderGameWorld()
+		// Compute effective stats once for the entire render frame
+		effStats := g.player.EffectiveStats()
+		g.renderGameWorld(effStats.MaxHP())
 
 		// HUD
-		es := g.player.EffectiveStats()
 		hudData := render.HUDData{
 			HP:     g.player.Stats.HP,
-			MaxHP:  es.MaxHP(),
+			MaxHP:  effStats.MaxHP(),
 			Level:  g.player.Stats.Level,
 			XP:     g.player.Stats.XP,
 			XPNext: g.player.Stats.XPToNextLevel(),
@@ -1449,7 +1455,7 @@ func (g *Game) Render() {
 				t := g.dungeonResult.Map.At(x, y)
 				return t == dungeon.TileWall || t == dungeon.TileCrackedWall
 			},
-			Markers: g.buildMiniMapMarkers(),
+			Markers: g.cachedMarkers,
 		})
 
 		// Overlays
@@ -1503,7 +1509,7 @@ func (g *Game) renderMenu() {
 	g.renderer.DrawText(24, 27, "M: Toggle Music", "#555555")
 }
 
-func (g *Game) renderGameWorld() {
+func (g *Game) renderGameWorld(playerMaxHP int) {
 	theme := dungeon.ThemeForFloor(g.floor)
 	g.renderer.DrawDungeonThemed(g.dungeonResult.Map, g.fov, theme)
 
@@ -1617,9 +1623,8 @@ func (g *Game) renderGameWorld() {
 	sprite := render.Sprites[g.player.Sprite]
 	if sprite != nil {
 		hpRatio := 1.0
-		maxHP := g.player.EffectiveStats().MaxHP()
-		if maxHP > 0 {
-			hpRatio = float64(g.player.Stats.HP) / float64(maxHP)
+		if playerMaxHP > 0 {
+			hpRatio = float64(g.player.Stats.HP) / float64(playerMaxHP)
 		}
 		color := render.HPColor(sprite.Color, hpRatio)
 		g.renderer.DrawSprite(sprite, 0, g.player.X, g.player.Y, color)
