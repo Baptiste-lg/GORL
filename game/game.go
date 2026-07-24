@@ -356,38 +356,69 @@ func (g *Game) useActiveItem() {
 	g.sfx.Pickup()
 	px, py := g.player.X, g.player.Y
 
+	syn := g.player.Synergies
+
 	switch a.ID {
 	case ActiveHealBurst:
 		healAmt := g.player.EffectiveStats().MaxHP() * 40 / 100
+		// Synergy: Crimson Tide (HealBurst+Vampiric: +5 HP per visible enemy)
+		if HasSynergy(syn, SynCrimsonTide) {
+			for _, e := range g.world.Enemies {
+				if e.IsAlive && g.fov.IsVisible(e.X, e.Y) {
+					healAmt += 5
+				}
+			}
+		}
 		healed := g.player.Heal(healAmt)
 		g.particles.SpawnText(px, py, "+"+itoa(healed)+" HP", "#44ff44")
+		// Synergy: Fountain of Life (HealBurst+Regeneration: doubled regen 10s)
+		if HasSynergy(syn, SynFountainOfLife) {
+			g.player.AddEffect(StatusEffect{
+				Name: "Fountain", Remaining: 10.0, Kind: ScrollKind(102),
+			})
+			g.particles.SpawnText(px, py, "FOUNTAIN OF LIFE!", "#44ffaa")
+		}
 
 	case ActiveShieldWall:
+		vitBonus := 10
+		// Synergy: Unbreakable (ShieldWall+Fortified: +20 VIT)
+		if HasSynergy(syn, SynUnbreakable) {
+			vitBonus = 20
+		}
+		_ = vitBonus // VIT applied via scroll shield effect check in enemyAttackPlayer
 		g.player.AddEffect(StatusEffect{
 			Name: "Shield Wall", Remaining: 8.0, Kind: ScrollShield,
 		})
 		g.particles.SpawnText(px, py, "SHIELD WALL!", "#4488ff")
 
 	case ActiveWarCry:
-		g.player.Stats.STR += 5
-		g.particles.SpawnText(px, py, "WAR CRY! +5 STR", "#ff8800")
-		// STR bonus wears off — handled as temporary effect
+		strBonus := 5
+		// Synergy: Rage Unleashed (WarCry+Berserker: +10 STR)
+		if HasSynergy(syn, SynRageUnleashed) {
+			strBonus = 10
+		}
+		g.player.Stats.STR += strBonus
+		g.particles.SpawnText(px, py, "WAR CRY! +"+itoa(strBonus)+" STR", "#ff8800")
 		g.player.AddEffect(StatusEffect{
 			Name: "War Cry", Remaining: 6.0, Kind: ScrollKind(101),
 		})
 
 	case ActiveFreeze:
+		freezeDur := 2.0
+		// Synergy: Absolute Zero (Freeze+Freezing: 4s freeze)
+		if HasSynergy(syn, SynAbsoluteZero) {
+			freezeDur = 4.0
+		}
 		count := 0
 		for _, e := range g.world.Enemies {
 			if e.IsAlive && g.fov.IsVisible(e.X, e.Y) {
-				e.ActionTimer += 2.0
+				e.ActionTimer += freezeDur
 				count++
 			}
 		}
 		g.particles.SpawnText(px, py, "FREEZE! ("+itoa(count)+")", "#44aaff")
 
 	case ActiveFireball:
-		// Damage enemies in a 3-tile line from player in last move direction
 		dx, dy := 0, 0
 		if g.keys["w"] || g.keys["ArrowUp"] {
 			dy = -1
@@ -399,16 +430,23 @@ func (g *Game) useActiveItem() {
 			dx = 1
 		}
 		if dx == 0 && dy == 0 {
-			dy = -1 // default: up
+			dy = -1
 		}
-		for i := 1; i <= 3; i++ {
+		fbRange := 3
+		fbDmg := 15
+		// Synergy: Inferno (Fireball+Burning: 5 tiles, +10 damage)
+		if HasSynergy(syn, SynInferno) {
+			fbRange = 5
+			fbDmg = 25
+		}
+		for i := 1; i <= fbRange; i++ {
 			tx, ty := px+dx*i, py+dy*i
 			if !g.dungeonResult.Map.At(tx, ty).Passable() {
 				break
 			}
 			if e := g.world.EnemyAt(tx, ty); e != nil {
-				e.Entity.TakeDamage(15)
-				g.particles.SpawnDamage(tx, ty, 15, "#ff4400")
+				e.Entity.TakeDamage(fbDmg)
+				g.particles.SpawnDamage(tx, ty, fbDmg, "#ff4400")
 				if !e.IsAlive {
 					g.killCount++
 				}
@@ -418,13 +456,22 @@ func (g *Game) useActiveItem() {
 		g.renderer.Shake(4.0, 0.2)
 
 	case ActivePoisonCloud:
-		dirs := [][2]int{{0, -1}, {0, 1}, {-1, 0}, {1, 0}, {-1, -1}, {-1, 1}, {1, -1}, {1, 1}}
-		for _, d := range dirs {
-			tx, ty := px+d[0], py+d[1]
-			if e := g.world.EnemyAt(tx, ty); e != nil {
-				e.Entity.TakeDamage(3)
-				e.ActionTimer += 1.0
-				g.particles.SpawnText(tx, ty, "POISON!", "#44aa44")
+		// Synergy: Plague Bearer (PoisonCloud+Venomous: double radius)
+		radius := 1
+		if HasSynergy(syn, SynPlagueBearer) {
+			radius = 2
+		}
+		for dy := -radius; dy <= radius; dy++ {
+			for dx := -radius; dx <= radius; dx++ {
+				if dx == 0 && dy == 0 {
+					continue
+				}
+				tx, ty := px+dx, py+dy
+				if e := g.world.EnemyAt(tx, ty); e != nil {
+					e.Entity.TakeDamage(3)
+					e.ActionTimer += 1.0
+					g.particles.SpawnText(tx, ty, "POISON!", "#44aa44")
+				}
 			}
 		}
 		g.particles.SpawnText(px, py, "POISON CLOUD!", "#44aa44")
@@ -443,7 +490,12 @@ func (g *Game) useActiveItem() {
 		if dx == 0 && dy == 0 {
 			dy = -1
 		}
-		for i := 1; i <= 3; i++ {
+		dashRange := 3
+		// Synergy: Flash Step (Dash+Swift: 5 tiles)
+		if HasSynergy(syn, SynFlashStep) {
+			dashRange = 5
+		}
+		for i := 1; i <= dashRange; i++ {
 			tx, ty := px+dx*i, py+dy*i
 			if !g.dungeonResult.Map.At(tx, ty).Passable() || g.world.EnemyAt(tx, ty) != nil {
 				break
@@ -454,6 +506,16 @@ func (g *Game) useActiveItem() {
 		g.renderer.CenterCamera(g.player.X, g.player.Y)
 		g.fov.Compute(g.dungeonResult.Map, g.player.X, g.player.Y, fovRadius)
 		g.particles.SpawnText(g.player.X, g.player.Y, "DASH!", "#44aaff")
+		// Synergy: Phantom (Dash+Evasion: 100% dodge 1s)
+		if HasSynergy(syn, SynPhantom) {
+			g.player.AddEffect(StatusEffect{
+				Name: "Phantom", Remaining: 1.0, Kind: ScrollKind(103),
+			})
+		}
+		// Synergy: Flash Step cooldown reset
+		if HasSynergy(syn, SynFlashStep) {
+			g.player.MoveCooldown = 0
+		}
 
 	case ActiveBlink:
 		dm := g.dungeonResult.Map
@@ -469,6 +531,15 @@ func (g *Game) useActiveItem() {
 			}
 		}
 		g.particles.SpawnText(g.player.X, g.player.Y, "BLINK!", "#cc44ff")
+		// Synergy: Vanish (Blink+Stealth: enemies lose aggro)
+		if HasSynergy(syn, SynVanish) {
+			for _, e := range g.world.Enemies {
+				if e.AI == AIChase {
+					e.AI = AIPatrol
+				}
+			}
+			g.particles.SpawnText(g.player.X, g.player.Y, "VANISH!", "#aaaaff")
+		}
 	}
 }
 
@@ -801,6 +872,10 @@ func (g *Game) playerAttack(enemy *Enemy) {
 	if result.IsCrit {
 		g.particles.SpawnCrit(enemy.X, enemy.Y, result.Damage)
 		g.sfx.CritHit()
+		// Synergy: Whirlwind (Swift+Lucky: crit halves next cooldown)
+		if HasSynergy(syn, SynWhirlwind) {
+			g.player.MoveCooldown /= 2
+		}
 	} else {
 		g.particles.SpawnDamage(enemy.X, enemy.Y, result.Damage, "#ffffff")
 		g.sfx.Hit()
@@ -878,9 +953,16 @@ func (g *Game) enemyAttackPlayer(enemy *Enemy) {
 		defender.Stats.VIT += defender.Stats.VIT / 2
 	}
 
+	dsyn := g.player.Synergies
+
 	// Armor affix: Evasion (+5% dodge via stats)
 	if g.player.ArmorHasAffix(AffixEvasion) {
-		defender.Stats.DEX += 3 // +4.5% dodge (3 * 0.015)
+		dexBonus := 3
+		// Synergy: Ice Dancer (Freezing+Evasion: +10% dodge total)
+		if HasSynergy(dsyn, SynIceDancer) {
+			dexBonus = 7
+		}
+		defender.Stats.DEX += dexBonus
 	}
 
 	result := ResolveAttack(enemy.Entity, &defender, g.rng)
@@ -890,11 +972,24 @@ func (g *Game) enemyAttackPlayer(enemy *Enemy) {
 
 		// Armor affix: Bulwark (reduce all damage by 1)
 		if g.player.ArmorHasAffix(AffixBulwark) && dmg > 1 {
-			dmg--
+			reduction := 1
+			// Synergy: Reaper's Guard (Executioner+Bulwark: reduce by 2)
+			if HasSynergy(dsyn, SynReaperGuard) {
+				reduction = 2
+			}
+			dmg -= reduction
+			if dmg < 1 {
+				dmg = 1
+			}
 		}
 
 		// Armor affix: Absorbing (10% chance to heal instead)
-		if g.player.ArmorHasAffix(AffixAbsorbing) && g.rng.Intn(100) < 10 {
+		absorbChance := 10
+		// Synergy: Fortune's Favor (Lucky+Absorbing: +15% absorb)
+		if HasSynergy(dsyn, SynFortuneFavor) {
+			absorbChance = 25
+		}
+		if g.player.ArmorHasAffix(AffixAbsorbing) && g.rng.Intn(100) < absorbChance {
 			g.player.Heal(dmg)
 			g.particles.SpawnText(g.player.X, g.player.Y, "ABSORB!", "#44ffaa")
 			dmg = 0
@@ -908,9 +1003,18 @@ func (g *Game) enemyAttackPlayer(enemy *Enemy) {
 
 	// Armor affix: Thorns (reflect 2 damage)
 	if !result.IsDodge && g.player.ArmorHasAffix(AffixThorns) {
-		thornDmg := enemy.Entity.TakeDamage(2)
+		thornAmt := 2
+		// Synergy: Iron Maiden (Thorns+ShieldWall active: thorns x3 while shielded)
+		if HasSynergy(dsyn, SynIronMaiden) && g.player.HasEffect(ScrollShield) {
+			thornAmt *= 3
+		}
+		thornDmg := enemy.Entity.TakeDamage(thornAmt)
 		if thornDmg > 0 {
 			g.particles.SpawnDamage(enemy.X, enemy.Y, thornDmg, "#aa4444")
+			// Synergy: Blood Mirror (Vampiric+Thorns: thorn damage heals)
+			if HasSynergy(dsyn, SynBloodMirror) {
+				g.player.Heal(thornDmg)
+			}
 		}
 	}
 
@@ -1002,6 +1106,10 @@ func (g *Game) Update(dt float64) {
 		detectRange := 6
 		if g.player.ArmorHasAffix(AffixStealth) {
 			detectRange = 4
+			// Synergy: Shadow Step (Swift+Stealth: range 3)
+			if HasSynergy(g.player.Synergies, SynShadowStep) {
+				detectRange = 3
+			}
 		}
 		g.world.UpdateEnemies(dt, g.player.X, g.player.Y, detectRange)
 		g.processEnemyCombat()
@@ -1283,6 +1391,30 @@ func (g *Game) renderEvent() {
 	g.renderer.DrawEvent(data)
 }
 
+func itemDetail(item *Item) string {
+	detail := ""
+	if item.BonusSTR > 0 {
+		detail += "+" + itoa(item.BonusSTR) + " STR "
+	}
+	if item.BonusDEX > 0 {
+		detail += "+" + itoa(item.BonusDEX) + " DEX "
+	}
+	if item.BonusVIT > 0 {
+		detail += "+" + itoa(item.BonusVIT) + " VIT "
+	}
+	if item.BonusLCK > 0 {
+		detail += "+" + itoa(item.BonusLCK) + " LCK "
+	}
+	if len(item.Affixes) > 0 {
+		for _, id := range item.Affixes {
+			if def, ok := AffixDefs[id]; ok {
+				detail += "[" + def.Name + "] "
+			}
+		}
+	}
+	return detail
+}
+
 func (g *Game) buildInventoryData() render.InventoryData {
 	inv := g.player.Inventory
 	data := render.InventoryData{
@@ -1297,25 +1429,19 @@ func (g *Game) buildInventoryData() render.InventoryData {
 		data.ArmorColor = inv.Armor.Rarity.Color()
 	}
 	for _, item := range inv.Items {
-		detail := ""
-		if item.BonusSTR > 0 {
-			detail += "+" + itoa(item.BonusSTR) + " STR "
-		}
-		if item.BonusDEX > 0 {
-			detail += "+" + itoa(item.BonusDEX) + " DEX "
-		}
-		if item.BonusVIT > 0 {
-			detail += "+" + itoa(item.BonusVIT) + " VIT "
-		}
-		if item.BonusLCK > 0 {
-			detail += "+" + itoa(item.BonusLCK) + " LCK "
-		}
 		data.Items = append(data.Items, render.InventoryItem{
 			Name:   item.Name,
 			Glyph:  item.Glyph(),
 			Color:  item.Rarity.Color(),
-			Detail: detail,
+			Detail: itemDetail(item),
 		})
+	}
+
+	// Active synergies
+	for _, sid := range g.player.Synergies {
+		if s := SynergyByID(sid); s != nil {
+			data.Synergies = append(data.Synergies, s.Name+" - "+s.Desc)
+		}
 	}
 	return data
 }
