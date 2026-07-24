@@ -129,6 +129,7 @@ type Enemy struct {
 	PatrolSteps int
 	BaseXP      int
 	rng         *rand.Rand
+	Boss        *BossState // non-nil for bosses
 }
 
 // NewEnemy creates an enemy from a definition, scaled to the given floor.
@@ -150,7 +151,7 @@ func NewEnemy(def EnemyDef, x, y, floor int, rng *rand.Rand) *Enemy {
 	stats.VIT = int(float64(stats.VIT) * hpMult)
 	stats.HP = stats.MaxHP()
 
-	return &Enemy{
+	e := &Enemy{
 		Entity:      NewEntity(x, y, def.Sprite, stats),
 		Type:        def.Type,
 		AI:          AIPatrol,
@@ -158,6 +159,10 @@ func NewEnemy(def EnemyDef, x, y, floor int, rng *rand.Rand) *Enemy {
 		BaseXP:      def.BaseXP,
 		rng:         rng,
 	}
+	if def.Type.IsBoss() {
+		e.Boss = NewBossState()
+	}
+	return e
 }
 
 // PickEnemyType selects a random enemy type appropriate for the given floor.
