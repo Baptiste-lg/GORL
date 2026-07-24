@@ -47,13 +47,13 @@ func BossCurrentPhase(hp, maxHP int) BossPhase {
 type BossAbility int
 
 const (
-	AbilityNone    BossAbility = iota
-	AbilityCharge                     // Minotaur: rush in a line
-	AbilityStomp                      // Minotaur: AoE damage around self
-	AbilitySummon                     // Lich: spawn skeleton minions
-	AbilityDrain                      // Lich: heal from player damage
-	AbilityBreath                     // Dragon: fire line AoE
-	AbilityRoar                       // Dragon: stun player briefly
+	AbilityNone   BossAbility = iota
+	AbilityCharge             // Minotaur: rush in a line
+	AbilityStomp              // Minotaur: AoE damage around self
+	AbilitySummon             // Lich: spawn skeleton minions
+	AbilityDrain              // Lich: heal from player damage
+	AbilityBreath             // Dragon: fire line AoE
+	AbilityRoar               // Dragon: stun player briefly
 )
 
 // DangerTile marks a tile that will be hit next turn (telegraphing).
