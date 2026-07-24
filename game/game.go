@@ -114,7 +114,8 @@ func (g *Game) generateFloor() {
 	g.dungeonResult = dungeon.Generate(seed)
 	g.fov = dungeon.NewFOV(dungeon.MapWidth, dungeon.MapHeight)
 	g.world = NewWorld(g.dungeonResult, g.floor, g.rng)
-	g.groundItems = g.world.GroundItems // treasure/secret room items
+	// Copy world ground items to avoid sharing the backing array
+	g.groundItems = append([]*Item(nil), g.world.GroundItems...)
 
 	sx, sy := g.dungeonResult.SpawnX, g.dungeonResult.SpawnY
 	if g.player == nil {
@@ -154,10 +155,15 @@ func (g *Game) registerInput() {
 	doc := js.Global().Get("document")
 
 	doc.Call("addEventListener", "keydown", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		key := args[0].Get("key").String()
+		evt := args[0]
+		// Don't block browser shortcuts (Ctrl/Meta + key)
+		if evt.Get("ctrlKey").Bool() || evt.Get("metaKey").Bool() || evt.Get("altKey").Bool() {
+			return nil
+		}
+		key := evt.Get("key").String()
 		g.keys[key] = true
 		g.handleKeyDown(key)
-		args[0].Call("preventDefault")
+		evt.Call("preventDefault")
 		return nil
 	}))
 
@@ -253,6 +259,7 @@ func (g *Game) handleInventoryKey(key string) {
 			item.X = g.player.X
 			item.Y = g.player.Y
 			g.groundItems = append(g.groundItems, item)
+			g.player.RecalcSynergies()
 		}
 	}
 }
@@ -447,10 +454,11 @@ func (g *Game) useActiveItem() {
 				break
 			}
 			if e := g.world.EnemyAt(tx, ty); e != nil {
+				wasAlive := e.IsAlive
 				e.Entity.TakeDamage(fbDmg)
 				g.particles.SpawnDamage(tx, ty, fbDmg, "#ff4400")
-				if !e.IsAlive {
-					g.killCount++
+				if wasAlive && !e.IsAlive {
+					g.rewardKill(e)
 				}
 			}
 			g.particles.SpawnText(tx, ty, "*", "#ff4400")
@@ -470,9 +478,13 @@ func (g *Game) useActiveItem() {
 				}
 				tx, ty := px+dx, py+dy
 				if e := g.world.EnemyAt(tx, ty); e != nil {
+					wasAlive := e.IsAlive
 					e.Entity.TakeDamage(3)
 					e.ActionTimer += 1.0
 					g.particles.SpawnText(tx, ty, "POISON!", "#44aa44")
+					if wasAlive && !e.IsAlive {
+						g.rewardKill(e)
+					}
 				}
 			}
 		}
@@ -542,6 +554,29 @@ func (g *Game) useActiveItem() {
 			}
 			g.particles.SpawnText(g.player.X, g.player.Y, "VANISH!", "#aaaaff")
 		}
+	}
+}
+
+// rewardKill grants XP, gold, and active charges for a kill that happened outside normal combat
+// (fireball, poison cloud, thorns, etc.)
+func (g *Game) rewardKill(enemy *Enemy) {
+	mult := g.streak.RegisterKill()
+	xp := int(float64(XPForKill(enemy.BaseXP, g.floor)) * mult)
+	g.player.Stats.XP += xp
+	g.killCount++
+
+	goldAmt := goldForKill(enemy.BaseXP, g.floor, g.rng)
+	g.player.Gold += goldAmt
+
+	if g.player.Active != nil && !g.player.Active.Ready() {
+		g.player.Active.AddCharge()
+	}
+
+	if g.rng.Float64() < lootDropRate {
+		loot := GenerateLoot(g.rng, g.floor)
+		loot.X = enemy.X
+		loot.Y = enemy.Y
+		g.groundItems = append(g.groundItems, loot)
 	}
 }
 
@@ -1015,12 +1050,16 @@ func (g *Game) enemyAttackPlayer(enemy *Enemy) {
 		if HasSynergy(dsyn, SynIronMaiden) && (g.player.HasEffect(ScrollShield) || g.player.HasEffect(ScrollKind(104))) {
 			thornAmt *= 3
 		}
+		wasAlive := enemy.IsAlive
 		thornDmg := enemy.Entity.TakeDamage(thornAmt)
 		if thornDmg > 0 {
 			g.particles.SpawnDamage(enemy.X, enemy.Y, thornDmg, "#aa4444")
 			// Synergy: Blood Mirror (Vampiric+Thorns: thorn damage heals)
 			if HasSynergy(dsyn, SynBloodMirror) {
 				g.player.Heal(thornDmg)
+			}
+			if wasAlive && !enemy.IsAlive {
+				g.rewardKill(enemy)
 			}
 		}
 	}
