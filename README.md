@@ -2,13 +2,13 @@
 
 A browser-based roguelike dungeon crawler written entirely in **Go**, compiled to **WebAssembly** and served via Nginx.
 
-## Play
+## [Play Online](https://baptiste-lg.github.io/GORL/)
+
+Or run locally with Docker:
 
 ```bash
 docker build -t gorl . && docker run -p 8080:8080 gorl
 ```
-
-Then open `http://localhost:8080`.
 
 ## Controls
 
