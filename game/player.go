@@ -5,6 +5,7 @@ type StatusEffect struct {
 	Name      string
 	Remaining float64 // seconds left
 	Kind      ScrollKind
+	Magnitude int // for reversible stat buffs (STR/VIT bonus to remove on expiry)
 }
 
 // Player wraps an Entity with player-specific state.
@@ -151,7 +152,28 @@ func (p *Player) Update(dt float64) {
 		p.Effects[i].Remaining -= dt
 		if p.Effects[i].Remaining > 0 {
 			alive = append(alive, p.Effects[i])
+		} else {
+			// Reverse stat buffs on expiry
+			p.onEffectExpired(p.Effects[i])
 		}
 	}
 	p.Effects = alive
+}
+
+func (p *Player) onEffectExpired(eff StatusEffect) {
+	if eff.Magnitude == 0 {
+		return
+	}
+	switch eff.Kind {
+	case ScrollKind(101): // War Cry: reverse STR
+		p.Stats.STR -= eff.Magnitude
+		if p.Stats.STR < 1 {
+			p.Stats.STR = 1
+		}
+	case ScrollKind(104): // Shield Wall: reverse VIT
+		p.Stats.VIT -= eff.Magnitude
+		if p.Stats.VIT < 1 {
+			p.Stats.VIT = 1
+		}
+	}
 }
