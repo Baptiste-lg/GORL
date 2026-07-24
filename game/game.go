@@ -385,11 +385,12 @@ func (g *Game) useActiveItem() {
 		if HasSynergy(syn, SynUnbreakable) {
 			vitBonus = 20
 		}
-		_ = vitBonus // VIT applied via scroll shield effect check in enemyAttackPlayer
+		g.player.Stats.VIT += vitBonus
 		g.player.AddEffect(StatusEffect{
-			Name: "Shield Wall", Remaining: 8.0, Kind: ScrollShield,
+			Name: "Shield Wall", Remaining: 8.0, Kind: ScrollKind(104),
+			Magnitude: vitBonus,
 		})
-		g.particles.SpawnText(px, py, "SHIELD WALL!", "#4488ff")
+		g.particles.SpawnText(px, py, "SHIELD WALL! +"+itoa(vitBonus)+" VIT", "#4488ff")
 
 	case ActiveWarCry:
 		strBonus := 5
@@ -401,6 +402,7 @@ func (g *Game) useActiveItem() {
 		g.particles.SpawnText(px, py, "WAR CRY! +"+itoa(strBonus)+" STR", "#ff8800")
 		g.player.AddEffect(StatusEffect{
 			Name: "War Cry", Remaining: 6.0, Kind: ScrollKind(101),
+			Magnitude: strBonus,
 		})
 
 	case ActiveFreeze:
@@ -782,7 +784,7 @@ func (g *Game) playerAttack(enemy *Enemy) {
 	// Weapon affix: Berserker (+50% damage below 30% HP)
 	berserkerActive := false
 	if g.player.WeaponHasAffix(AffixBerserker) {
-		maxHP := g.player.EffectiveStats().MaxHP()
+		maxHP := attacker.Stats.MaxHP()
 		if maxHP > 0 && float64(g.player.Stats.HP)/float64(maxHP) < 0.30 {
 			attacker.Stats.STR += attacker.Stats.STR / 2
 			berserkerActive = true
@@ -967,6 +969,11 @@ func (g *Game) enemyAttackPlayer(enemy *Enemy) {
 
 	result := ResolveAttack(enemy.Entity, &defender, g.rng)
 
+	// Synergy: Phantom (Dash+Evasion: 100% dodge while effect active)
+	if !result.IsDodge && g.player.HasEffect(ScrollKind(103)) {
+		result.IsDodge = true
+	}
+
 	if !result.IsDodge {
 		dmg := result.Damage
 
@@ -1004,8 +1011,8 @@ func (g *Game) enemyAttackPlayer(enemy *Enemy) {
 	// Armor affix: Thorns (reflect 2 damage)
 	if !result.IsDodge && g.player.ArmorHasAffix(AffixThorns) {
 		thornAmt := 2
-		// Synergy: Iron Maiden (Thorns+ShieldWall active: thorns x3 while shielded)
-		if HasSynergy(dsyn, SynIronMaiden) && g.player.HasEffect(ScrollShield) {
+		// Synergy: Iron Maiden (Thorns+ShieldWall: thorns x3 while shielded)
+		if HasSynergy(dsyn, SynIronMaiden) && (g.player.HasEffect(ScrollShield) || g.player.HasEffect(ScrollKind(104))) {
 			thornAmt *= 3
 		}
 		thornDmg := enemy.Entity.TakeDamage(thornAmt)
@@ -1067,9 +1074,22 @@ func (g *Game) processRegen(dt float64) {
 	g.player.RegenTimer += dt
 	if g.player.RegenTimer >= regenInterval {
 		g.player.RegenTimer -= regenInterval
-		healed := g.player.Heal(1)
+		regenAmt := 1
+		// Armor affix: Regeneration (+1 HP)
+		if g.player.ArmorHasAffix(AffixRegeneration) {
+			regenAmt += 1
+			// Synergy: Toxic Resilience (Venomous+Regeneration: +2 more)
+			if HasSynergy(g.player.Synergies, SynToxicResilience) {
+				regenAmt += 2
+			}
+		}
+		// Synergy: Fountain of Life (doubled regen while effect active)
+		if g.player.HasEffect(ScrollKind(102)) {
+			regenAmt *= 2
+		}
+		healed := g.player.Heal(regenAmt)
 		if healed > 0 {
-			g.particles.SpawnText(g.player.X, g.player.Y, "+1", "#44ff44")
+			g.particles.SpawnText(g.player.X, g.player.Y, "+"+itoa(healed), "#44ff44")
 		}
 	}
 }
