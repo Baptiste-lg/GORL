@@ -132,7 +132,8 @@ func (r *Renderer) FillTileBg(vx, vy int, color string) {
 }
 
 // DrawDungeonThemed renders the dungeon with a specific color theme.
-func (r *Renderer) DrawDungeonThemed(dm *dungeon.DungeonMap, fov *dungeon.FOV, theme dungeon.Theme) {
+// playerX/playerY are world coords for distance-based brightness.
+func (r *Renderer) DrawDungeonThemed(dm *dungeon.DungeonMap, fov *dungeon.FOV, theme dungeon.Theme, playerX, playerY int) {
 	for vy := 0; vy < ViewTilesY; vy++ {
 		for vx := 0; vx < ViewTilesX; vx++ {
 			wx := r.CamX + vx
@@ -147,14 +148,52 @@ func (r *Renderer) DrawDungeonThemed(dm *dungeon.DungeonMap, fov *dungeon.FOV, t
 			row := vy*TileCells + 1
 
 			if fov.IsVisible(wx, wy) {
-				r.FillTileBg(vx, vy, tile.BgColor(theme))
-				r.DrawChar(col, row, tile.GlyphVariant(wx, wy), tile.ThemedColor(theme))
+				// Distance-based brightness falloff
+				dx := wx - playerX
+				dy := wy - playerY
+				dist := dx*dx + dy*dy // squared distance
+				brightness := 1.0
+				if dist > 4 {
+					brightness = 1.0 - float64(dist-4)*0.012
+					if brightness < 0.35 {
+						brightness = 0.35
+					}
+				}
+
+				fg := tile.ThemedColor(theme)
+				bg := tile.BgColor(theme)
+				if brightness < 0.95 {
+					fg = scaleColor(fg, brightness)
+					bg = scaleColor(bg, brightness)
+				}
+				r.FillTileBg(vx, vy, bg)
+
+				// Stairs get a glow effect
+				if tile == dungeon.TileStairsDown || tile == dungeon.TileStairsUp {
+					r.DrawCharGlow(col, row, tile.Glyph(), fg, "#ffdd44", 8)
+				} else {
+					r.DrawChar(col, row, tile.GlyphVariant(wx, wy), fg)
+				}
 			} else if fov.IsExplored(wx, wy) {
 				r.FillTileBg(vx, vy, tile.DimBgColor(theme))
 				r.DrawChar(col, row, tile.GlyphVariant(wx, wy), dimColor(tile.ThemedColor(theme)))
 			}
 		}
 	}
+}
+
+// scaleColor multiplies each RGB channel by a brightness factor (0.0-1.0).
+func scaleColor(hex string, brightness float64) string {
+	if len(hex) != 7 {
+		return hex
+	}
+	r := hexVal(hex[1])<<4 + hexVal(hex[2])
+	g := hexVal(hex[3])<<4 + hexVal(hex[4])
+	b := hexVal(hex[5])<<4 + hexVal(hex[6])
+	r = int(float64(r) * brightness)
+	g = int(float64(g) * brightness)
+	b = int(float64(b) * brightness)
+	return "#" + hexByte(r) + hexByte(g) + hexByte(b)
 }
 
 // dimColor returns a darker version of a hex color for explored-but-not-visible tiles.
@@ -200,6 +239,17 @@ func (r *Renderer) DrawChar(col, row int, ch string, color string) {
 	r.ctx.Call("fillText", ch, px, py)
 }
 
+// DrawCharGlow renders a character with a glow halo effect.
+func (r *Renderer) DrawCharGlow(col, row int, ch string, color string, glowColor string, blur int) {
+	px := col * CellWidth
+	py := row * CellHeight
+	r.ctx.Set("shadowColor", glowColor)
+	r.ctx.Set("shadowBlur", blur)
+	r.ctx.Set("fillStyle", color)
+	r.ctx.Call("fillText", ch, px, py)
+	r.ctx.Set("shadowBlur", 0)
+}
+
 // DrawText renders a string starting at grid position (col, row).
 func (r *Renderer) DrawText(col, row int, text string, color string) {
 	px := col * CellWidth
@@ -222,6 +272,16 @@ func (r *Renderer) FillCell(col, row int, color string) {
 // DrawSprite renders a multi-char sprite at a world tile position.
 func (r *Renderer) DrawSprite(sprite *Sprite, frame int, worldX, worldY int, color string) {
 	r.DrawSpriteWithBg(sprite, frame, worldX, worldY, color, "")
+}
+
+// FlashTile briefly highlights a tile with a bright color (for hit effects).
+func (r *Renderer) FlashTile(worldX, worldY int, flashColor string) {
+	vx := worldX - r.CamX
+	vy := worldY - r.CamY
+	if vx < 0 || vx >= ViewTilesX || vy < 0 || vy >= ViewTilesY {
+		return
+	}
+	r.FillTileBg(vx, vy, flashColor)
 }
 
 // DrawSpriteWithBg renders a sprite with an optional background tint behind it.
