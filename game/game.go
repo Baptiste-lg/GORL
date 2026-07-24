@@ -243,6 +243,7 @@ func (g *Game) handleInventoryKey(key string) {
 		}
 		if item.Type == ItemWeapon || item.Type == ItemArmor {
 			inv.Equip(inv.Selected)
+			g.player.RecalcSynergies()
 		} else {
 			g.player.UseItem(inv.Selected)
 		}
@@ -705,6 +706,8 @@ func (g *Game) playerAttack(enemy *Enemy) {
 	attacker := *g.player.Entity
 	attacker.Stats = g.player.EffectiveStats()
 
+	syn := g.player.Synergies
+
 	// Weapon affix: Berserker (+50% damage below 30% HP)
 	berserkerActive := false
 	if g.player.WeaponHasAffix(AffixBerserker) {
@@ -717,7 +720,17 @@ func (g *Game) playerAttack(enemy *Enemy) {
 
 	// Weapon affix: Lucky (+5% crit — applied via stats)
 	if g.player.WeaponHasAffix(AffixLucky) {
-		attacker.Stats.LCK += 3 // +6% crit (3 * 0.02)
+		attacker.Stats.LCK += 3
+	}
+
+	// Synergy: Desperate Gambit (Lucky+Berserker: +15% crit below 30%)
+	if berserkerActive && HasSynergy(syn, SynDesperateGambit) {
+		attacker.Stats.LCK += 8 // +16% extra crit
+	}
+
+	// Synergy: Juggernaut (Berserker+Fortified: extra STR at low HP)
+	if berserkerActive && HasSynergy(syn, SynJuggernaut) {
+		attacker.Stats.STR += attacker.Stats.STR / 4
 	}
 
 	result := ResolveAttack(&attacker, enemy.Entity, g.rng)
@@ -730,10 +743,19 @@ func (g *Game) playerAttack(enemy *Enemy) {
 	}
 
 	// Weapon affix: Burning (+3 fire damage)
-	if g.player.WeaponHasAffix(AffixBurning) && !result.IsDodge {
-		bonus := enemy.Entity.TakeDamage(3)
+	if g.player.WeaponHasAffix(AffixBurning) {
+		fireDmg := 3
+		// Synergy: Toxic Flame (Burning+Venomous: +2 fire)
+		if HasSynergy(syn, SynToxicFlame) {
+			fireDmg += 2
+		}
+		// Synergy: Flame Lord (Burning+Fireproof: +5 fire)
+		if HasSynergy(syn, SynFlameLord) {
+			fireDmg += 5
+		}
+		bonus := enemy.Entity.TakeDamage(fireDmg)
 		result.Damage += bonus
-		g.particles.SpawnText(enemy.X, enemy.Y, "+3 fire", "#ff4400")
+		g.particles.SpawnText(enemy.X, enemy.Y, "+"+itoa(fireDmg)+" fire", "#ff4400")
 	}
 
 	// Weapon affix: Executioner (double damage to enemies below 25% HP)
@@ -748,14 +770,29 @@ func (g *Game) playerAttack(enemy *Enemy) {
 
 	// Weapon affix: Freezing (15% chance to stun)
 	if g.player.WeaponHasAffix(AffixFreezing) && g.rng.Intn(100) < 15 {
-		enemy.ActionTimer += 2.0 // skip ~2 seconds of actions
+		freezeDur := 2.0
+		// Synergy: Shatter (Freezing+Executioner: longer freeze)
+		if HasSynergy(syn, SynShatter) {
+			freezeDur = 3.0
+			// Extra damage on frozen crit
+			if result.IsCrit {
+				bonus := enemy.Entity.TakeDamage(result.Damage) // 3x total
+				result.Damage += bonus
+				g.particles.SpawnText(enemy.X, enemy.Y, "SHATTER!", "#88ccff")
+			}
+		}
+		enemy.ActionTimer += freezeDur
 		g.particles.SpawnText(enemy.X, enemy.Y, "FROZEN!", "#44aaff")
 	}
 
 	// Weapon affix: Venomous (20% chance to poison)
 	if g.player.WeaponHasAffix(AffixVenomous) && g.rng.Intn(100) < 20 {
-		// Mark enemy as poisoned via action timer penalty + direct damage
-		enemy.Entity.TakeDamage(2)
+		poisonDmg := 2
+		// Synergy: Toxic Flame (Burning+Venomous: +2 poison)
+		if HasSynergy(syn, SynToxicFlame) {
+			poisonDmg += 2
+		}
+		enemy.Entity.TakeDamage(poisonDmg)
 		g.particles.SpawnText(enemy.X, enemy.Y, "POISON!", "#44aa44")
 	}
 
@@ -818,6 +855,7 @@ func (g *Game) playerAttack(enemy *Enemy) {
 			// Boss always drops an active item
 			newActive := NewActiveItem(RandomActiveID(g.rng))
 			g.player.Active = newActive
+			g.player.RecalcSynergies()
 			g.particles.SpawnText(g.player.X, g.player.Y, "Active: "+newActive.Name+"!", "#cc44ff")
 		} else if g.rng.Float64() < lootDropRate {
 			loot := GenerateLoot(g.rng, g.floor)
