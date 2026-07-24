@@ -5,21 +5,21 @@ type SynergyID int
 
 const (
 	// Weapon + Weapon affix combos
-	SynToxicFlame     SynergyID = iota // Burning + Venomous
+	SynToxicFlame      SynergyID = iota // Burning + Venomous
 	SynShatter                          // Freezing + Executioner
 	SynDesperateGambit                  // Lucky + Berserker
 	SynWhirlwind                        // Swift + Lucky
 	SynBloodthirst                      // Vampiric + Berserker
 
 	// Weapon + Armor affix combos
-	SynFlameLord      // Burning + Fireproof
+	SynFlameLord       // Burning + Fireproof
 	SynToxicResilience // Venomous + Regeneration
-	SynBloodMirror    // Vampiric + Thorns
-	SynIceDancer      // Freezing + Evasion
-	SynShadowStep     // Swift + Stealth
-	SynJuggernaut     // Berserker + Fortified
-	SynReaperGuard    // Executioner + Bulwark
-	SynFortuneFavor   // Lucky + Absorbing
+	SynBloodMirror     // Vampiric + Thorns
+	SynIceDancer       // Freezing + Evasion
+	SynShadowStep      // Swift + Stealth
+	SynJuggernaut      // Berserker + Fortified
+	SynReaperGuard     // Executioner + Bulwark
+	SynFortuneFavor    // Lucky + Absorbing
 
 	// Active + Affix combos
 	SynInferno        // Fireball + Burning
@@ -39,10 +39,10 @@ const (
 
 // Synergy defines what's needed for a synergy to activate and what it does.
 type Synergy struct {
-	ID       SynergyID
-	Name     string
-	Desc     string
-	Affixes  []AffixID // required affixes (across all equipment)
+	ID        SynergyID
+	Name      string
+	Desc      string
+	Affixes   []AffixID // required affixes (across all equipment)
 	ActiveReq ActiveID  // required active item (-1 for none)
 }
 
