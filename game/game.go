@@ -1511,7 +1511,7 @@ func (g *Game) renderMenu() {
 
 func (g *Game) renderGameWorld(playerMaxHP int) {
 	theme := dungeon.ThemeForFloor(g.floor)
-	g.renderer.DrawDungeonThemed(g.dungeonResult.Map, g.fov, theme)
+	g.renderer.DrawDungeonThemed(g.dungeonResult.Map, g.fov, theme, g.player.X, g.player.Y)
 
 	// Revealed traps
 	for _, trap := range g.world.Traps {
